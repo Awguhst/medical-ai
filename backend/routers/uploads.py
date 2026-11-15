@@ -9,8 +9,9 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 
 from config import get_settings
+from i18n import Language, tr
 from models.schemas import UploadResponse
-from routers.deps import require_session, validate_id
+from routers.deps import get_language, require_session, validate_id
 from services.image_service import ImageValidationError, get_image_store
 from services.image_triage_service import UNKNOWN, get_image_triage_service
 from services.safety_service import log_ref
@@ -24,9 +25,10 @@ async def upload_image(
     file: UploadFile = File(...),
     conversation_id: str = Form(...),
     session_id: str = Depends(require_session),
+    language: Language = Depends(get_language),
 ) -> UploadResponse:
     settings = get_settings()
-    validate_id(conversation_id, "разговор")
+    validate_id(conversation_id, "conversation", language)
 
     # Read at most limit+1 bytes so an oversized body is never fully buffered.
     data = await file.read(settings.max_upload_bytes + 1)
@@ -39,7 +41,9 @@ async def upload_image(
         )
     except ImageValidationError as exc:
         status = 413 if exc.code == "file_too_large" else 400
-        raise HTTPException(status_code=status, detail={"code": exc.code, "message": exc.message})
+        raise HTTPException(
+            status_code=status, detail={"code": exc.code, "message": exc.message(language)}
+        )
 
     # Local vision-transformer triage: label the picture (xray / scan / document /
     # photo) so the assistant knows which tool to call without asking. The
@@ -76,14 +80,18 @@ async def upload_image(
 
 
 @router.get("/images/{image_id}")
-async def get_image(image_id: str, session_id: str = Depends(require_session)) -> FileResponse:
-    validate_id(image_id, "изображение")
+async def get_image(
+    image_id: str,
+    session_id: str = Depends(require_session),
+    language: Language = Depends(get_language),
+) -> FileResponse:
+    validate_id(image_id, "image", language)
     record = get_image_store().get(image_id, session_id)
     if record is None or record.media != "image":
         # Same answer for "unknown", "expired", "belongs to someone else" and "is a PDF".
         raise HTTPException(
             status_code=404,
-            detail={"code": "image_not_found", "message": "Изображението не е налично."},
+            detail={"code": "image_not_found", "message": tr(language, "image_not_found")},
         )
     return FileResponse(
         record.path,
@@ -94,9 +102,11 @@ async def get_image(image_id: str, session_id: str = Depends(require_session)) -
 
 @router.delete("/conversations/{conversation_id}")
 async def delete_conversation(
-    conversation_id: str, session_id: str = Depends(require_session)
+    conversation_id: str,
+    session_id: str = Depends(require_session),
+    language: Language = Depends(get_language),
 ) -> dict:
-    validate_id(conversation_id, "разговор")
+    validate_id(conversation_id, "conversation", language)
     removed = get_image_store().delete_conversation(session_id, conversation_id)
     return {"status": "deleted", "removed_images": removed}
 

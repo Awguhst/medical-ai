@@ -20,6 +20,7 @@ from typing import Any, Awaitable, Callable
 from pydantic import BaseModel, ValidationError
 
 from config import Settings, get_settings
+from i18n import DEFAULT_LANGUAGE, MESSAGES, localize, tr
 from models.schemas import AnalyzeXrayInput, FindDoctorsInput, LookupMedicationInput, ReadDocumentInput
 from services.document_service import get_document_reader
 from services.framar_service import get_framar_service
@@ -39,6 +40,7 @@ class ToolContext:
     conversation_id: str
     demo_mode: bool
     settings: Settings
+    language: str = DEFAULT_LANGUAGE  # of the interface; selects the user-facing texts
 
 
 @dataclass
@@ -58,9 +60,15 @@ class ToolSpec:
     input_schema: dict[str, Any]  # JSON Schema advertised to Claude
     input_model: type[BaseModel]  # authoritative server-side validation
     handler: ToolHandler
-    ui_label: str  # human-readable name shown in the chat
-    ui_running_text: str
+    ui_label: dict[str, str]  # name shown in the chat, per interface language ("bg", "en")
+    ui_running_text: dict[str, str]
     timeout_seconds: float | None = None
+
+    def label(self, language: str) -> str:
+        return localize(self.ui_label, language)
+
+    def running_text(self, language: str) -> str:
+        return localize(self.ui_running_text, language)
 
 
 class ToolRegistry:
@@ -96,7 +104,7 @@ class ToolRegistry:
             logger.warning("model requested an unregistered tool")
             return ToolOutcome(
                 {"status": "error", "error": "unknown_tool", "message": "This tool does not exist."},
-                {"status": "error", "message": "Заявен е непознат инструмент."},
+                {"status": "error", "message": tr(ctx.language, "tool.unknown")},
                 is_error=True,
             )
         try:
@@ -108,7 +116,7 @@ class ToolRegistry:
                     "error": "invalid_input",
                     "message": "The tool input did not match the required schema.",
                 },
-                {"status": "error", "message": "Невалидни входни данни за инструмента."},
+                {"status": "error", "message": tr(ctx.language, "tool.invalid_input")},
                 is_error=True,
             )
 
@@ -119,30 +127,25 @@ class ToolRegistry:
             logger.warning("tool %s timed out (conv %s)", name, log_ref(ctx.conversation_id))
             return ToolOutcome(
                 {"status": "timeout", "message": f"The tool did not finish within {timeout:.0f}s."},
-                {"status": "timeout", "message": "Анализът отне твърде много време и беше прекратен."},
+                {"status": "timeout", "message": tr(ctx.language, "tool.timeout")},
                 is_error=True,
             )
         except Exception as exc:  # noqa: BLE001 - never leak internals to the model
             logger.error("tool %s failed: %s", name, type(exc).__name__)
             return ToolOutcome(
                 {"status": "error", "error": "tool_failed", "message": "The tool failed unexpectedly."},
-                {"status": "error", "message": "Възникна грешка при изпълнението на инструмента."},
+                {"status": "error", "message": tr(ctx.language, "tool.failed")},
                 is_error=True,
             )
 
 
-# --- analyze_xray ----------------------------------------------------------
+def _ui_message(language: str, tool: str, status: str, fallback: str) -> str:
+    """Status line of the tool card, in the interface language (texts in i18n.py)."""
+    key = f"{tool}.{status}"
+    return tr(language, key if key in MESSAGES else f"{tool}.{fallback}")
 
-_UI_MESSAGES = {
-    "success": "AI анализът е завършен.",
-    "simulated_demo": "Демо симулацията е завършена. Това не е реален анализ.",
-    "model_not_configured": "Моделът на X-ray Analyzer не е конфигуриран на сървъра.",
-    "model_incompatible": "Конфигурираният модел не е медицински и X-ray Analyzer не може да го използва.",
-    "model_error": "Моделът на X-ray Analyzer не можа да бъде зареден.",
-    "unsupported_image": "Изображението не изглежда като рентгенова снимка и не беше анализирано.",
-    "image_not_found": "Изображението не е намерено или е изтекло. Прикачете го отново.",
-    "error": "Възникна грешка при анализа на изображението.",
-}
+
+# --- analyze_xray ----------------------------------------------------------
 
 
 _TRIAGE_REJECTIONS = {
@@ -189,7 +192,8 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
         }
         return ToolOutcome(
             payload,
-            {"status": "image_not_found", "message": _UI_MESSAGES["image_not_found"]},
+            {"status": "image_not_found",
+             "message": _ui_message(ctx.language, "analyze_xray", "image_not_found", "error")},
             is_error=True,
         )
 
@@ -200,7 +204,8 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
                 "image_id": record.image_id,
                 "message": "This attachment is a PDF document, not an image. Use read_document for documents.",
             },
-            {"status": "unsupported_image", "message": _UI_MESSAGES["unsupported_image"]},
+            {"status": "unsupported_image",
+             "message": _ui_message(ctx.language, "analyze_xray", "unsupported_image", "error")},
         )
 
     triage = {"content": record.content, "confidence": round(record.content_confidence, 2)}
@@ -217,7 +222,8 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
                 "triage": triage,
                 "detections": [],
             },
-            {"status": "unsupported_image", "message": _UI_MESSAGES["unsupported_image"]},
+            {"status": "unsupported_image",
+             "message": _ui_message(ctx.language, "analyze_xray", "unsupported_image", "error")},
         )
 
     # 3-6. Weights check, inference and drawing run off the event loop.
@@ -236,7 +242,7 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
 
     ui = {
         "status": status,
-        "message": _UI_MESSAGES.get(status, _UI_MESSAGES["error"]),
+        "message": _ui_message(ctx.language, "analyze_xray", status, "error"),
         "image_id": record.image_id,
         "annotated_image_id": annotated_id,
         "simulated": bool(payload.get("simulated")),
@@ -256,16 +262,6 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
 
 # --- read_document -----------------------------------------------------------
 
-_DOCUMENT_UI_MESSAGES = {
-    "success": "Документът е разчетен.",
-    "not_a_medical_document": "Файлът не изглежда като медицински документ.",
-    "medical_image": "Файлът е медицинска снимка, а не текстов документ.",
-    "unreadable": "Документът не можа да бъде разчетен достатъчно добре.",
-    "document_not_found": "Файлът не е намерен или е изтекъл. Прикачете го отново.",
-    "reader_unavailable": "В момента документът не може да бъде разчетен. Опитайте отново по-късно.",
-    "too_long": "Документът е твърде дълъг, за да бъде разчетен наведнъж.",
-    "not_read": "Документът не беше разчетен.",
-}
 _DOCUMENT_SENT = {"success", "not_a_medical_document", "medical_image", "unreadable", "too_long", "not_read"}
 
 
@@ -283,7 +279,8 @@ async def _read_document(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
         }
         return ToolOutcome(
             payload, {"kind": "document", "status": "document_not_found",
-                      "message": _DOCUMENT_UI_MESSAGES["document_not_found"]}, is_error=True,
+                      "message": _ui_message(ctx.language, "read_document", "document_not_found", "not_read")},
+            is_error=True,
         )
 
     payload = {"image_id": record.image_id, **(await get_document_reader().read(record))}
@@ -291,7 +288,7 @@ async def _read_document(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
     ui = {
         "kind": "document",
         "status": status,
-        "message": _DOCUMENT_UI_MESSAGES.get(status, _DOCUMENT_UI_MESSAGES["not_read"]),
+        "message": _ui_message(ctx.language, "read_document", status, "not_read"),
         "file_name": record.filename,
         "file_type": record.media,
         "pages": record.pages,
@@ -310,15 +307,6 @@ async def _read_document(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
 
 # --- find_doctors ------------------------------------------------------------
 
-_DOCTOR_UI_MESSAGES = {
-    "success": "Намерени са специалисти в Superdoc.",
-    "no_results": "В Superdoc няма намерени лекари за това търсене.",
-    "unknown_specialty": "Специалността не беше разпозната в Superdoc.",
-    "unknown_city": "Населеното място не е налично в Superdoc.",
-    "source_unavailable": "В момента няма връзка със Superdoc. Опитайте отново по-късно.",
-}
-
-
 async def _find_doctors(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
     assert isinstance(parsed, FindDoctorsInput)
     payload = await get_superdoc_service().search(parsed.specialty, parsed.city, parsed.sort)
@@ -326,7 +314,7 @@ async def _find_doctors(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
     ui = {
         "kind": "doctors",
         "status": status,
-        "message": _DOCTOR_UI_MESSAGES.get(status, "Търсенето не беше успешно."),
+        "message": _ui_message(ctx.language, "find_doctors", status, "failed"),
         "query": payload.get("query"),
         "search_url": payload.get("search_url"),
         "doctors": payload.get("doctors", []),
@@ -340,14 +328,6 @@ async def _find_doctors(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
 
 # --- lookup_medication -------------------------------------------------------
 
-_MEDICATION_UI_MESSAGES = {
-    "success": "Намерена е информация във Framar.",
-    "partial": "Във Framar е намерена информация само за част от лекарствата.",
-    "not_found": "Във Framar не беше намерено такова лекарство.",
-    "source_unavailable": "В момента няма връзка с Framar. Опитайте отново по-късно.",
-}
-
-
 async def _lookup_medication(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
     assert isinstance(parsed, LookupMedicationInput)
     payload = await get_framar_service().lookup(parsed.medications)
@@ -356,7 +336,7 @@ async def _lookup_medication(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome
     ui = {
         "kind": "medications",
         "status": status,
-        "message": _MEDICATION_UI_MESSAGES.get(status, "Търсенето не беше успешно."),
+        "message": _ui_message(ctx.language, "lookup_medication", status, "failed"),
         "medications": [
             {
                 "query": m.get("query"),
@@ -434,8 +414,11 @@ def build_registry() -> ToolRegistry:
                 },
                 input_model=LookupMedicationInput,
                 handler=_lookup_medication,
-                ui_label="Framar: справка за лекарства",
-                ui_running_text="Проверка на лекарствата във Framar...",
+                ui_label={"bg": "Framar: справка за лекарства", "en": "Framar: medication lookup"},
+                ui_running_text={
+                    "bg": "Проверка на лекарствата във Framar...",
+                    "en": "Checking the medicines on Framar...",
+                },
                 timeout_seconds=50,
             )
         )
@@ -484,8 +467,11 @@ def build_registry() -> ToolRegistry:
                 },
                 input_model=FindDoctorsInput,
                 handler=_find_doctors,
-                ui_label="Superdoc: търсене на лекари",
-                ui_running_text="Търсене на специалисти в Superdoc...",
+                ui_label={"bg": "Superdoc: търсене на лекари", "en": "Superdoc: doctor search"},
+                ui_running_text={
+                    "bg": "Търсене на специалисти в Superdoc...",
+                    "en": "Searching for specialists on Superdoc...",
+                },
                 timeout_seconds=30,
             )
         )
@@ -525,8 +511,8 @@ def build_registry() -> ToolRegistry:
                 },
                 input_model=ReadDocumentInput,
                 handler=_read_document,
-                ui_label="Четец на медицински документи",
-                ui_running_text="Разчитане на документа...",
+                ui_label={"bg": "Четец на медицински документи", "en": "Medical document reader"},
+                ui_running_text={"bg": "Разчитане на документа...", "en": "Reading the document..."},
                 timeout_seconds=150,
             )
         )
@@ -568,8 +554,8 @@ def build_registry() -> ToolRegistry:
             },
             input_model=AnalyzeXrayInput,
             handler=_analyze_xray,
-            ui_label="X-ray Analyzer",
-            ui_running_text="Анализиране на изображението...",
+            ui_label={"bg": "X-ray Analyzer", "en": "X-ray Analyzer"},
+            ui_running_text={"bg": "Анализиране на изображението...", "en": "Analysing the image..."},
         )
     )
     return registry
@@ -585,5 +571,7 @@ def get_registry() -> ToolRegistry:
     return _registry
 
 
-def default_context(session_id: str, conversation_id: str, demo_mode: bool) -> ToolContext:
-    return ToolContext(session_id, conversation_id, demo_mode, get_settings())
+def default_context(
+    session_id: str, conversation_id: str, demo_mode: bool, language: str = DEFAULT_LANGUAGE
+) -> ToolContext:
+    return ToolContext(session_id, conversation_id, demo_mode, get_settings(), language)

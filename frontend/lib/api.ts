@@ -1,3 +1,4 @@
+import { getCurrentLanguage, tr } from "./i18n";
 import type { Attachment, ChatEvent, Health } from "./types";
 
 /**
@@ -23,9 +24,6 @@ export class ApiError extends Error {
   }
 }
 
-const UNREACHABLE =
-  "Няма връзка със сървъра на MedAI. Уверете се, че бекендът е стартиран.";
-
 async function toApiError(response: Response): Promise<ApiError> {
   try {
     const body = await response.json();
@@ -34,16 +32,20 @@ async function toApiError(response: Response): Promise<ApiError> {
   } catch {
     /* not JSON */
   }
-  return new ApiError(`Грешка на сървъра (${response.status}).`, "http_error", response.status);
+  return new ApiError(tr("api_server_error", { status: response.status }), "http_error", response.status);
 }
 
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
+  // The interface language travels with every call: the server answers (error
+  // messages, tool cards, and Claude's replies) in that language.
+  const headers = new Headers(init.headers);
+  headers.set("Accept-Language", getCurrentLanguage());
   let response: Response;
   try {
-    response = await fetch(`${apiUrl()}${path}`, init);
+    response = await fetch(`${apiUrl()}${path}`, { ...init, headers });
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new ApiError(UNREACHABLE, "unreachable");
+    throw new ApiError(tr("api_unreachable"), "unreachable");
   }
   if (!response.ok) throw await toApiError(response);
   return response;
@@ -144,7 +146,7 @@ export async function streamChat(
     body: JSON.stringify(payload),
     signal,
   });
-  if (!response.body) throw new ApiError("Сървърът не върна отговор.", "empty_stream");
+  if (!response.body) throw new ApiError(tr("api_empty_stream"), "empty_stream");
 
   const reader = response.body.getReader();
   const decoder = new TextDecoder();
@@ -176,6 +178,6 @@ export async function streamChat(
     if (buffer.trim()) flush(buffer);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
-    throw new ApiError("Връзката със сървъра прекъсна по време на отговора.", "stream_interrupted");
+    throw new ApiError(tr("api_stream_interrupted"), "stream_interrupted");
   }
 }

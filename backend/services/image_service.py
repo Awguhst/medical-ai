@@ -31,18 +31,24 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 from pypdf import PdfReader
 
 from config import Settings, get_settings
+from i18n import tr
 from services.safety_service import sanitize_filename
 
 ALLOWED_FORMATS = {"PNG", "JPEG", "WEBP", "BMP", "MPO"}  # MPO = multi-picture JPEG
 
 
 class ImageValidationError(Exception):
-    """Raised with a stable code and a Bulgarian, user-facing message."""
+    """Raised with a stable code. The user-facing text is looked up per interface
+    language in i18n.py, under ``upload.<code>`` unless another key is given."""
 
-    def __init__(self, code: str, message: str):
-        super().__init__(message)
+    def __init__(self, code: str, key: str | None = None, **params: object):
         self.code = code
-        self.message = message
+        self.key = key or f"upload.{code}"
+        self.params = params
+        super().__init__(self.key)
+
+    def message(self, language: str) -> str:
+        return tr(language, self.key, **self.params)
 
 
 @dataclass
@@ -110,12 +116,9 @@ class ImageStore:
     ) -> ImageRecord:
         s = self._settings
         if not data:
-            raise ImageValidationError("empty_file", "Файлът е празен.")
+            raise ImageValidationError("empty_file")
         if len(data) > s.max_upload_bytes:
-            raise ImageValidationError(
-                "file_too_large",
-                f"Файлът е твърде голям. Максимум {s.max_upload_bytes // (1024 * 1024)} MB.",
-            )
+            raise ImageValidationError("file_too_large", max_mb=s.max_upload_bytes // (1024 * 1024))
 
         if data.lstrip()[:5] == b"%PDF-":
             return self._store_pdf(data, filename, session_id, conversation_id)
@@ -125,41 +128,26 @@ class ImageStore:
                 fmt = (probe.format or "").upper()
                 width, height = probe.size
                 if fmt not in ALLOWED_FORMATS:
-                    raise ImageValidationError(
-                        "unsupported_format",
-                        "Неподдържан формат. Използвайте PNG, JPEG, WEBP, BMP или PDF.",
-                    )
+                    raise ImageValidationError("unsupported_format")
                 if (
                     width > s.max_image_side
                     or height > s.max_image_side
                     or width * height > s.max_image_pixels
                 ):
-                    raise ImageValidationError(
-                        "image_too_large",
-                        f"Изображението е твърде голямо (макс. {s.max_image_side}px по страна).",
-                    )
+                    raise ImageValidationError("image_too_large", max_side=s.max_image_side)
                 if width < s.min_image_side or height < s.min_image_side:
-                    raise ImageValidationError(
-                        "image_too_small",
-                        f"Изображението е твърде малко (мин. {s.min_image_side}px по страна).",
-                    )
+                    raise ImageValidationError("image_too_small", min_side=s.min_image_side)
                 probe.load()  # full decode: catches truncated / corrupt files
                 img = ImageOps.exif_transpose(probe)
                 img = img.convert("L" if img.mode in {"L", "LA", "1", "I", "I;16", "F"} else "RGB")
         except ImageValidationError:
             raise
         except (UnidentifiedImageError, Image.DecompressionBombError, OSError, ValueError, SyntaxError):
-            raise ImageValidationError(
-                "not_an_image",
-                "Файлът не е валидно изображение или PDF. Използвайте PNG, JPEG, WEBP, BMP или PDF.",
-            ) from None
+            raise ImageValidationError("not_an_image") from None
 
         with self._lock:
             if self._count_for_conversation(session_id, conversation_id) >= s.max_images_per_conversation:
-                raise ImageValidationError(
-                    "too_many_images",
-                    "Достигнат е лимитът за изображения в този разговор.",
-                )
+                raise ImageValidationError("too_many_images")
             image_id = "img_" + secrets.token_urlsafe(18)
             path = self._new_path(image_id)
 
@@ -188,21 +176,17 @@ class ImageStore:
             encrypted = reader.is_encrypted
             pages = 0 if encrypted else len(reader.pages)
         except Exception:  # noqa: BLE001 - pypdf raises many types for malformed files
-            raise ImageValidationError("not_a_pdf", "Файлът не е валиден PDF документ.") from None
+            raise ImageValidationError("not_a_pdf") from None
         if encrypted:
-            raise ImageValidationError("pdf_encrypted", "PDF документът е защитен с парола и не може да бъде прочетен.")
+            raise ImageValidationError("pdf_encrypted")
         if pages < 1:
-            raise ImageValidationError("not_a_pdf", "PDF документът няма страници.")
+            raise ImageValidationError("not_a_pdf", key="upload.pdf_no_pages")
         if pages > s.max_pdf_pages:
-            raise ImageValidationError(
-                "pdf_too_long", f"PDF документът има {pages} страници. Максимумът е {s.max_pdf_pages}."
-            )
+            raise ImageValidationError("pdf_too_long", pages=pages, max_pages=s.max_pdf_pages)
 
         with self._lock:
             if self._count_for_conversation(session_id, conversation_id) >= s.max_images_per_conversation:
-                raise ImageValidationError(
-                    "too_many_images", "Достигнат е лимитът за файлове в този разговор."
-                )
+                raise ImageValidationError("too_many_images", key="upload.too_many_files")
             image_id = "doc_" + secrets.token_urlsafe(18)
             path = self._new_path(image_id, ".pdf")
 

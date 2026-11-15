@@ -17,9 +17,9 @@ Browser (Next.js)  ──►  FastAPI backend  ──►  Claude API (text + too
                         analyze_xray ──► local YOLO model (image never leaves the server)
 ```
 
-* The user chats in Bulgarian and may attach an X-ray or a medical document.
-  There is no separate
-  "analyse" button or page.
+* The user chats in Bulgarian or English (a setting; the assistant replies in
+  the chosen language) and may attach an X-ray or a medical document. There
+  is no separate "analyse" button or page.
 * Claude receives the text plus **attachment metadata only** (an `image_id`,
   file name, size) — never the file itself. The one exception is the document
   reader, which sends a document the user asks to be read in a separate
@@ -33,7 +33,7 @@ Browser (Next.js)  ──►  FastAPI backend  ──►  Claude API (text + too
   call, runs YOLO locally, draws the boxes, returns the structured result to
   Claude as a `tool_result`, and streams the tool activity and the annotated
   image into the chat.
-* Claude explains the result in Bulgarian, including its limitations.
+* Claude explains the result in the interface language, including its limitations.
 
 ## Requirements
 
@@ -91,6 +91,12 @@ backend serves the frontend itself, so neither setting is needed there.
    drag-and-drop and paste also work). The server recognises it as an X-ray
    and the assistant runs the analysis straight away; a short note such as
    „това е на гърдите ми“ is enough.
+4. **Настройки / Settings** holds the interface language (Bulgarian or
+   English; the assistant answers in it, and so do the API's messages and
+   tool cards) and the colour theme: **Graphite** (neutral black, blue
+   accent), **Ember** (warm brown-black, copper accent) or **Dusk** (deep
+   plum, rose accent), all dark. Both are kept in `localStorage`, apply
+   before the first paint, and carry no health data.
 
 ### Without YOLO weights
 
@@ -288,7 +294,7 @@ Notes:
 ## Checks
 
 ```bash
-# Backend: 118 offline checks (no network, key or weights needed)
+# Backend: 130 offline checks (no network, key or weights needed)
 cd backend && python smoke_test.py
 
 # Frontend
@@ -296,6 +302,7 @@ cd frontend && npm run typecheck && npm run build
 ```
 
 `smoke_test.py` covers upload validation, session isolation, path traversal,
+the interface language (`Accept-Language` on errors, tool cards and the system prompt),
 the tool registry, the YOLO guard rails, the document reader (PDF validation,
 scripted vision replies, masking of identifiers, failure handling), the
 Superdoc and Framar tools (against HTML fixtures: name matching, leaflet extraction, pair-wise interaction checks,
@@ -306,7 +313,12 @@ scripted stand-in for the Anthropic client.
 ## API
 
 All endpoints except `/api/health` require an `X-Session-Id` header (a random
-id the browser keeps in `sessionStorage`).
+id the browser keeps in `sessionStorage`). Every endpoint also honours
+`Accept-Language` (`bg`, the default, or `en`): it selects the language of
+error messages and of the tool names and status lines in the chat events,
+and for `POST /api/chat` adds a second system block that asks Claude to reply
+in English (after the cache breakpoint, so the cached prompt is unchanged).
+The frontend sends it with every request; see `backend/i18n.py`.
 
 | Endpoint | Purpose |
 |---|---|
@@ -323,6 +335,7 @@ id the browser keeps in `sessionStorage`).
 ├── backend/
 │   ├── main.py                     FastAPI app, CORS, health, cleanup task
 │   ├── config.py                   Settings from .env
+│   ├── i18n.py                     User-facing messages in Bulgarian and English (Accept-Language)
 │   ├── routers/                    chat.py (SSE), uploads.py, deps.py
 │   ├── services/
 │   │   ├── claude_service.py       Messages API streaming + tool-use loop
@@ -340,11 +353,12 @@ id the browser keeps in `sessionStorage`).
 │   ├── smoke_test.py
 │   └── requirements.txt
 ├── frontend/
-│   ├── app/                        layout.tsx, page.tsx, globals.css
+│   ├── app/                        layout.tsx, page.tsx, globals.css (the three themes)
 │   ├── components/                 ChatInterface, ChatMessage, ChatInput, Sidebar,
 │   │                               ImageAttachment, ToolResult, ConsentDialog,
 │   │                               SettingsDialog, ui/ (shadcn-style primitives)
-│   └── lib/                        api.ts, storage.ts, types.ts, utils.ts
+│   └── lib/                        api.ts, i18n.ts (UI strings), preferences.ts (language, themes),
+│                                   storage.ts, types.ts, utils.ts
 ├── models/                         YOLO weights go here (README.md inside); triage/ is the CLIP cache
 ├── .railway/railway.ts             Railway infrastructure as code (one service)
 ├── Dockerfile                      The whole app in one image: frontend static export + API + models
@@ -356,7 +370,10 @@ id the browser keeps in `sessionStorage`).
 ## Adding another tool
 
 Tools live in `backend/services/tool_registry.py`. Write an async handler and
-register it; the chat loop and the frontend's tool card need no changes.
+register it; the chat loop and the frontend's tool card need no changes. The
+tool's name and running text are given per interface language, and any other
+text the user will see (the card's status line) goes into `backend/i18n.py`
+and is looked up with `tr(ctx.language, key)`.
 
 ```python
 class LookupInput(BaseModel):
@@ -364,14 +381,16 @@ class LookupInput(BaseModel):
     term: str
 
 async def _lookup(parsed: LookupInput, ctx: ToolContext) -> ToolOutcome:
-    return ToolOutcome(payload={"status": "success", ...}, ui={"status": "success", "message": "Готово."})
+    return ToolOutcome(payload={"status": "success", ...},
+                       ui={"status": "success", "message": tr(ctx.language, "lookup_term.success")})
 
 registry.register(ToolSpec(
     name="lookup_term", description="...",
     input_schema={"type": "object", "properties": {"term": {"type": "string"}},
                   "required": ["term"], "additionalProperties": False},
     input_model=LookupInput, handler=_lookup,
-    ui_label="Медицински речник", ui_running_text="Търсене...",
+    ui_label={"bg": "Медицински речник", "en": "Medical dictionary"},
+    ui_running_text={"bg": "Търсене...", "en": "Searching..."},
 ))
 ```
 
@@ -397,7 +416,9 @@ registry.register(ToolSpec(
   images are not sent there. A document is sent there only when the user asks
   for it to be read; its name, ЕГН and address are kept out of the result.
 * **History** lives in the browser's `sessionStorage` and can be deleted per
-  conversation or entirely from Настройки.
+  conversation or entirely from Настройки. The interface language and the
+  theme are the only preferences kept in `localStorage`; they carry no health
+  data.
 * **Logs** contain statuses and hashed references, not message text, file
   names or image data.
 * **Emergency wording** in a message triggers an immediate 112 banner,

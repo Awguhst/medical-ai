@@ -11,6 +11,7 @@ import {
   Stethoscope,
 } from "lucide-react";
 
+import { useT } from "@/lib/i18n";
 import type { ToolPart } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import DoctorResults from "@/components/DoctorResults";
@@ -37,6 +38,7 @@ const INFO_STATUSES = new Set([
 
 /** Inline record of one tool call: running indicator, then the result. */
 export default function ToolResult({ part }: { part: ToolPart }) {
+  const t = useT();
   const running = part.state === "running";
   const result = part.result;
   const simulated = Boolean(result?.simulated);
@@ -71,19 +73,19 @@ export default function ToolResult({ part }: { part: ToolPart }) {
         >
           <Icon className="size-4" />
           {running && (
-            <span className="absolute inset-x-1 top-0 h-0.5 animate-scan rounded bg-teal-400" />
+            <span className="absolute inset-x-1 top-0 h-0.5 animate-scan rounded bg-brand-alt" />
           )}
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-[12px] leading-tight text-ink-500">MedAI използва инструмент</p>
+          <p className="text-[12px] leading-tight text-ink-500">{t("tool_using")}</p>
           <p className="mt-0.5 truncate font-display text-sm font-bold leading-tight text-ink-900">
             {part.label}
           </p>
         </div>
         {simulated && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-[0_4px_12px_-4px_rgb(245_158_11/0.6)]">
+          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-500 px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide text-white shadow-[0_4px_12px_-4px_rgb(var(--rgb-warn)/0.6)]">
             <FlaskConical className="size-3" />
-            Демо
+            {t("demo_badge")}
           </span>
         )}
       </div>
@@ -102,7 +104,7 @@ export default function ToolResult({ part }: { part: ToolPart }) {
               ))}
             </span>
             <span className="text-ink-700" role="status">
-              {part.runningText || "Изпълнение..."}
+              {part.runningText || t("tool_running")}
             </span>
           </>
         ) : (
@@ -117,7 +119,7 @@ export default function ToolResult({ part }: { part: ToolPart }) {
               <CircleAlert className="mt-0.5 size-4 shrink-0 text-red-600" />
             )}
             <span className={cn("animate-fade font-medium", ok ? "text-teal-800" : "text-ink-700")}>
-              {result?.message ?? "Инструментът приключи."}
+              {result?.message ?? t("tool_finished")}
             </span>
           </>
         )}
@@ -139,27 +141,21 @@ export default function ToolResult({ part }: { part: ToolPart }) {
         <div className="animate-fade space-y-3 border-t border-line p-4">
           {simulated && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] font-medium leading-snug text-amber-900">
-              Това е симулация за тестване на интерфейса. Никакъв модел не е анализирал снимката.
-              Рамките и стойностите са случайни и нямат медицинско значение.
+              {t("demo_simulation_note")}
             </p>
           )}
 
           {result.annotated_image_id && (
             <ImageAttachment
               imageId={result.annotated_image_id}
-              alt={
-                simulated
-                  ? "Демо изображение със симулирани рамки"
-                  : "Рентгенова снимка с отбелязани области от модела"
-              }
+              alt={simulated ? t("demo_image_alt") : t("xray_annotated_model_alt")}
               sizeClassName="max-h-[26rem] max-w-full"
             />
           )}
 
           {ok && detections.length === 0 && (
             <p className="rounded-xl border border-line bg-fill px-3 py-2.5 text-[13px] leading-snug text-ink-700">
-              Моделът не отбеляза области над зададения праг. Това не означава, че снимката е
-              нормална.
+              {t("no_detections")}
             </p>
           )}
         </div>

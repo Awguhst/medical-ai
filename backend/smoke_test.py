@@ -44,6 +44,8 @@ import services.claude_service as claude_service  # noqa: E402
 from main import app  # noqa: E402
 from services.safety_service import detect_emergency, sanitize_filename  # noqa: E402
 from services.tool_registry import default_context, get_registry  # noqa: E402
+from prompts.medical_system_prompt import MEDICAL_SYSTEM_PROMPT  # noqa: E402
+from i18n import parse_language, tr  # noqa: E402
 
 import services.superdoc_service as superdoc_service  # noqa: E402
 import services.framar_service as framar_service  # noqa: E402
@@ -283,12 +285,16 @@ def png_bytes(kind: str) -> bytes:
     return buf.getvalue()
 
 
-def upload(client: TestClient, data: bytes, name: str, session: str = SESSION_A, conv: str = CONV):
+def upload(client: TestClient, data: bytes, name: str, session: str = SESSION_A, conv: str = CONV,
+           language: str | None = None):
+    headers = {"X-Session-Id": session}
+    if language:
+        headers["Accept-Language"] = language
     return client.post(
         "/api/upload",
         files={"file": (name, data, "image/png")},
         data={"conversation_id": conv},
-        headers={"X-Session-Id": session},
+        headers=headers,
     )
 
 
@@ -363,7 +369,10 @@ def install_fake(script) -> FakeMessages:
 
 
 def chat(client: TestClient, text: str, attachment_ids=(), history=(), demo=False, consent=True,
-         session: str = SESSION_A):
+         session: str = SESSION_A, language: str | None = None):
+    headers = {"X-Session-Id": session}
+    if language:
+        headers["Accept-Language"] = language  # what the browser sends for the chosen UI language
     response = client.post(
         "/api/chat",
         json={
@@ -373,7 +382,7 @@ def chat(client: TestClient, text: str, attachment_ids=(), history=(), demo=Fals
             "history": list(history),
             "message": {"text": text, "attachment_ids": list(attachment_ids)},
         },
-        headers={"X-Session-Id": session},
+        headers=headers,
     )
     events = []
     if response.status_code == 200:
@@ -476,12 +485,32 @@ def main() -> None:
         r, _ = chat(client, "x" * 7000)
         check(r.status_code == 413, "over-long message is refused")
 
+        print("interface language (Accept-Language header)")
+        r, _ = chat(client, "Hello", consent=False, language="en")
+        check(r.status_code == 403 and r.json()["error"]["message"].startswith("Consent is required"),
+              "Accept-Language: en gives English error messages")
+        r, _ = chat(client, "Здравей", consent=False, language="de-DE,de;q=0.9,fr;q=0.8")
+        check(r.json()["error"]["message"].startswith("Необходимо е съгласие"),
+              "an unsupported language falls back to Bulgarian")
+        r, _ = chat(client, "Hello", consent=False, language="en-GB,en;q=0.9")
+        check(r.json()["error"]["message"].startswith("Consent is required"),
+              "a regional tag such as en-GB selects English")
+        check(upload(client, b"", "x.png", language="en").json()["error"]["message"] == "The file is empty.",
+              "upload errors follow the interface language")
+        check(upload(client, b"", "x.png").json()["error"]["message"] == "Файлът е празен.",
+              "without the header everything stays in Bulgarian")
+        check(client.get("/api/images/not-valid!", headers={"X-Session-Id": SESSION_A, "Accept-Language": "en"})
+              .json()["error"]["message"] == "Invalid identifier (image).",
+              "identifier errors are translated too")
+
         print("chat: plain answer")
         fake = install_fake([text_turn("Здравейте! Как мога да помогна?")])
         r, events = chat(client, "Здравей, имам кашлица и температура от три дни.")
         types = [e["type"] for e in events]
         check(types == ["text_delta", "done"], "text is streamed and the turn completes")
         sent = fake.calls[0]
+        check(len(sent["system"]) == 1 and "cache_control" in sent["system"][0],
+              "a Bulgarian interface sends only the cached system prompt")
         check({t["name"] for t in sent["tools"]} == {"analyze_xray", "find_doctors", "lookup_medication", "read_document"}
               and all(t["strict"] is True for t in sent["tools"]),
               "tool schemas are sent to Claude")
@@ -516,6 +545,25 @@ def main() -> None:
               and m[-1]["content"][0]["tool_use_id"] == "toolu_1",
               "tool_result follows immediately with the matching id")
         result_id = events[1]["result_id"]
+
+        print("chat: English interface")
+        fake = install_fake([
+            tool_turn("read_document", {"image_id": "img_doesnotexist123"}),
+            text_turn("That file is no longer available."),
+        ])
+        _, events = chat(client, "Can you read the attached document?", language="en")
+        check(events[0]["label"] == "Medical document reader"
+              and events[0]["running_text"] == "Reading the document..."
+              and events[1]["result"]["message"] == "The file was not found or has expired. Attach it again.",
+              "tool names and status lines follow the interface language")
+        system = fake.calls[0]["system"]
+        check(len(system) == 2 and system[0]["text"] == MEDICAL_SYSTEM_PROMPT and "cache_control" in system[0]
+              and "Interface language: English" in system[1]["text"] and "cache_control" not in system[1],
+              "an English interface adds a second system block after the cached prompt")
+        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_A, CONV, False, "en"))
+        check(out.ui["message"] == "The X-ray Analyzer model is not configured on the server."
+              and out.payload["status"] == "model_not_configured",
+              "tool results carry the translated status line; the model payload is unchanged")
 
         print("chat: X-ray recognised at upload is analysed before Claude answers")
         from services.image_service import get_image_store as _image_store
@@ -855,6 +903,13 @@ def main() -> None:
           "ordinary question is not flagged")
     check(sanitize_filename("..\\..\\снимка<script>.png") == "снимка_script_.png",
           "file name sanitiser keeps Cyrillic and strips markup")
+
+    check(parse_language("en-US,en;q=0.9") == "en" and parse_language("bg") == "bg"
+          and parse_language(None) == "bg" and parse_language("fr") == "bg",
+          "Accept-Language parsing picks the first supported language")
+    check(tr("en", "upload.pdf_too_long", pages=12, max_pages=10) == "The PDF document has 12 pages. The maximum is 10."
+          and tr("xx", "empty_message") == "Съобщението е празно.",
+          "messages are formatted and fall back to Bulgarian")
 
     print(f"\nAll {PASSED} checks passed.")
 

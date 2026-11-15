@@ -1,9 +1,19 @@
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_THEME,
+  PREFERENCE_KEYS,
+  isLanguage,
+  isThemeName,
+  loadPreference,
+  savePreference,
+} from "./preferences";
 import type { Conversation, Settings } from "./types";
 import { newId } from "./utils";
 
 /**
- * Everything is kept in sessionStorage: it disappears when the tab is closed
- * and is never written to the server.
+ * Everything here is kept in sessionStorage: it disappears when the tab is
+ * closed and is never written to the server. Language and theme are the
+ * exception (no health data) and go to localStorage via preferences.ts.
  */
 const KEYS = {
   session: "medai.session",
@@ -84,11 +94,21 @@ export function saveConsent(value: boolean) {
 }
 
 export function loadSettings(): Settings {
-  return { demoMode: false, showToolActivity: false, ...read<Partial<Settings>>(KEYS.settings, {}) };
+  const session = read<Partial<Settings>>(KEYS.settings, {});
+  const language = loadPreference(PREFERENCE_KEYS.language);
+  const theme = loadPreference(PREFERENCE_KEYS.theme);
+  return {
+    demoMode: session.demoMode ?? false,
+    showToolActivity: session.showToolActivity ?? false,
+    language: isLanguage(language) ? language : DEFAULT_LANGUAGE,
+    theme: isThemeName(theme) ? theme : DEFAULT_THEME,
+  };
 }
 
-export function saveSettings(settings: Settings) {
-  write(KEYS.settings, settings);
+export function saveSettings({ language, theme, ...session }: Settings) {
+  write(KEYS.settings, session);
+  savePreference(PREFERENCE_KEYS.language, language);
+  savePreference(PREFERENCE_KEYS.theme, theme);
 }
 
 export function clearHistory() {

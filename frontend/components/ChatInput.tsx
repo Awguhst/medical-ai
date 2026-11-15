@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import { ApiError, uploadImage } from "@/lib/api";
+import { useT, type MessageKey } from "@/lib/i18n";
 import type { Attachment } from "@/lib/types";
 import { cn, newId } from "@/lib/utils";
 
@@ -22,11 +23,11 @@ const isAccepted = (file: File) => file.type.startsWith("image/") || isPdf(file)
 const MAX_FILES = 4;
 const MAX_BYTES = 10 * 1024 * 1024;
 /** Badge for what the server recognised in the picture ("unknown" shows nothing). */
-const CONTENT_LABELS: Record<string, string> = {
-  xray: "Рентген",
-  scan: "Скан",
-  document: "Документ",
-  photo: "Снимка",
+const CONTENT_LABELS: Record<string, MessageKey> = {
+  xray: "content_xray",
+  scan: "content_scan",
+  document: "content_document",
+  photo: "content_photo",
 };
 
 type Pending = {
@@ -56,6 +57,7 @@ export default function ChatInput({
   onSend,
   onStop,
 }: Props) {
+  const t = useT();
   const [text, setText] = useState("");
   const [pending, setPending] = useState<Pending[]>([]);
   const [dragging, setDragging] = useState(false);
@@ -105,7 +107,7 @@ export default function ChatInput({
           status: "uploading",
         };
         if (file.size > MAX_BYTES) {
-          return { ...item, status: "error", error: "Файлът е над 10 MB." };
+          return { ...item, status: "error", error: t("file_too_large") };
         }
         const targetConversation = conversationId;
         uploadImage(file, conversationId, sessionId)
@@ -116,7 +118,7 @@ export default function ChatInput({
             );
           })
           .catch((err) => {
-            const message = err instanceof ApiError ? err.message : "Качването беше неуспешно.";
+            const message = err instanceof ApiError ? err.message : t("upload_failed");
             setPending((list) =>
               list.map((p) => (p.key === key ? { ...p, status: "error", error: message } : p)),
             );
@@ -126,7 +128,7 @@ export default function ChatInput({
       countRef.current += accepted.length;
       setPending((current) => [...current, ...accepted]);
     },
-    [conversationId, sessionId],
+    [conversationId, sessionId, t],
   );
 
   const remove = (key: string) =>
@@ -186,59 +188,62 @@ export default function ChatInput({
           <span className="flex size-9 items-center justify-center rounded-xl bg-brand-400/15 text-brand-300 ring-1 ring-brand-400/40">
             <ImagePlus className="size-[18px]" />
           </span>
-          Пуснете файла тук
+          {t("drop_here")}
         </div>
       )}
 
       {pending.length > 0 && (
         <ul className="flex flex-wrap gap-3 px-3 pt-3">
-          {pending.map((p) => (
-            <li key={p.key} className="relative animate-pop">
-              <div
-                className={cn(
-                  "relative size-[4.5rem] overflow-hidden rounded-xl bg-black ring-1 transition-shadow duration-200",
-                  p.status === "error" ? "ring-red-300" : "ring-white/15",
-                )}
-                title={p.error ?? p.name}
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                {p.pdf ? (
-                  <span className="flex size-full flex-col items-center justify-center gap-1 bg-fill-hover text-ink-700">
-                    <FileText className="size-6" />
-                    <span className="text-[10px] font-semibold uppercase tracking-wide">PDF</span>
-                  </span>
-                ) : (
-                  <img src={p.previewUrl} alt={p.name} className="size-full object-cover" />
-                )}
-                {p.status === "ready" && !p.pdf && CONTENT_LABELS[p.attachment?.content ?? ""] && (
-                  <span className="absolute inset-x-0 bottom-0 animate-fade bg-black/65 px-1 py-0.5 text-center text-[9.5px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-sm">
-                    {CONTENT_LABELS[p.attachment?.content ?? ""]}
-                  </span>
-                )}
-                {p.status === "uploading" && (
-                  <span className="absolute inset-0 flex animate-fade items-center justify-center bg-black/55 text-white backdrop-blur-[2px]">
-                    <LoaderCircle className="size-5 animate-spin" />
-                  </span>
-                )}
+          {pending.map((p) => {
+            const contentKey = CONTENT_LABELS[p.attachment?.content ?? ""];
+            return (
+              <li key={p.key} className="relative animate-pop">
+                <div
+                  className={cn(
+                    "relative size-[4.5rem] overflow-hidden rounded-xl bg-black ring-1 transition-shadow duration-200",
+                    p.status === "error" ? "ring-red-300" : "ring-white/15",
+                  )}
+                  title={p.error ?? p.name}
+                >
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  {p.pdf ? (
+                    <span className="flex size-full flex-col items-center justify-center gap-1 bg-fill-hover text-ink-700">
+                      <FileText className="size-6" />
+                      <span className="text-[10px] font-semibold uppercase tracking-wide">PDF</span>
+                    </span>
+                  ) : (
+                    <img src={p.previewUrl} alt={p.name} className="size-full object-cover" />
+                  )}
+                  {p.status === "ready" && !p.pdf && contentKey && (
+                    <span className="absolute inset-x-0 bottom-0 animate-fade bg-black/65 px-1 py-0.5 text-center text-[9.5px] font-semibold uppercase tracking-wider text-white/90 backdrop-blur-sm">
+                      {t(contentKey)}
+                    </span>
+                  )}
+                  {p.status === "uploading" && (
+                    <span className="absolute inset-0 flex animate-fade items-center justify-center bg-black/55 text-white backdrop-blur-[2px]">
+                      <LoaderCircle className="size-5 animate-spin" />
+                    </span>
+                  )}
+                  {p.status === "error" && (
+                    <span className="absolute inset-0 flex items-center justify-center bg-red-900/70 text-white">
+                      <CircleAlert className="size-5" />
+                    </span>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => remove(p.key)}
+                  className="focus-ring absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-black text-white shadow-soft ring-2 ring-card transition-[scale,background-color] duration-200 ease-spring hover:scale-110 hover:bg-red-600 active:scale-95"
+                  aria-label={t("remove_file", { name: p.name })}
+                >
+                  <X className="size-3" />
+                </button>
                 {p.status === "error" && (
-                  <span className="absolute inset-0 flex items-center justify-center bg-red-900/70 text-white">
-                    <CircleAlert className="size-5" />
-                  </span>
+                  <p className="mt-1 w-[4.5rem] text-[10.5px] leading-tight text-red-700">{p.error}</p>
                 )}
-              </div>
-              <button
-                type="button"
-                onClick={() => remove(p.key)}
-                className="focus-ring absolute -right-1.5 -top-1.5 flex size-5 items-center justify-center rounded-full bg-black text-white shadow-soft ring-2 ring-card transition-[scale,background-color] duration-200 ease-spring hover:scale-110 hover:bg-red-600 active:scale-95"
-                aria-label={`Премахни ${p.name}`}
-              >
-                <X className="size-3" />
-              </button>
-              {p.status === "error" && (
-                <p className="mt-1 w-[4.5rem] text-[10.5px] leading-tight text-red-700">{p.error}</p>
-              )}
-            </li>
-          ))}
+              </li>
+            );
+          })}
         </ul>
       )}
 
@@ -259,8 +264,8 @@ export default function ChatInput({
           onClick={() => fileRef.current?.click()}
           disabled={disabled || pending.length >= MAX_FILES}
           className="focus-ring flex size-9 shrink-0 items-center justify-center rounded-xl text-ink-500 transition-[background-color,color,scale] duration-200 ease-out-quart hover:bg-fill-hover hover:text-ink-900 active:scale-95 disabled:opacity-40"
-          aria-label="Прикачи снимка или документ"
-          title="Прикачи рентгенова снимка или медицински документ (PNG, JPEG, WEBP, BMP, PDF)"
+          aria-label={t("attach")}
+          title={t("attach_hint")}
         >
           <Paperclip className="size-[18px]" />
         </button>
@@ -285,8 +290,8 @@ export default function ChatInput({
               addFiles(files);
             }
           }}
-          placeholder="Опишете симптом или задайте въпрос..."
-          aria-label="Съобщение до MedAI"
+          placeholder={t("composer_placeholder")}
+          aria-label={t("composer_label")}
           className="scroll-quiet max-h-[200px] min-h-9 flex-1 resize-none bg-transparent px-1 py-1.5 text-[15px] leading-6 text-ink-900 outline-none transition-opacity duration-200 placeholder:text-ink-400 disabled:opacity-60"
         />
 
@@ -294,9 +299,9 @@ export default function ChatInput({
           <button
             type="button"
             onClick={onStop}
-            className="focus-ring flex size-9 shrink-0 animate-pop items-center justify-center rounded-xl bg-white text-black shadow-sm transition-[scale,background-color] duration-200 ease-out-quart hover:scale-105 hover:bg-primary active:scale-95"
-            aria-label="Спри отговора"
-            title="Спри"
+            className="focus-ring flex size-9 shrink-0 animate-pop items-center justify-center rounded-xl bg-primary text-black shadow-sm transition-[scale,background-color] duration-200 ease-out-quart hover:scale-105 hover:bg-primary-hover active:scale-95"
+            aria-label={t("stop_reply")}
+            title={t("stop")}
           >
             <Square className="size-3.5 fill-current" />
           </button>
@@ -306,8 +311,8 @@ export default function ChatInput({
             onClick={submit}
             disabled={!canSend}
             className="fx-primary focus-ring group flex size-9 shrink-0 items-center justify-center rounded-xl bg-primary text-black shadow-sm hover:bg-primary-hover active:scale-95 disabled:bg-fill-hover disabled:text-ink-400 disabled:shadow-none"
-            aria-label="Изпрати"
-            title="Изпрати (Enter)"
+            aria-label={t("send")}
+            title={t("send_hint")}
           >
             {uploading ? (
               <LoaderCircle className="size-5 animate-spin" />

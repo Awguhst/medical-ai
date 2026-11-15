@@ -2,27 +2,28 @@
 
 import { CloudUpload, FileText } from "lucide-react";
 
+import { useT, type MessageKey } from "@/lib/i18n";
 import type { ToolResultData } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const READABLE: Record<string, { label: string; className: string }> = {
-  good: { label: "Четлив", className: "bg-teal-100 text-teal-800" },
-  partial: { label: "Частично четлив", className: "bg-amber-100 text-amber-800" },
-  poor: { label: "Трудно четлив", className: "bg-red-100 text-red-800" },
+const READABLE: Record<string, { key: MessageKey; className: string }> = {
+  good: { key: "readable_good", className: "bg-teal-100 text-teal-800" },
+  partial: { key: "readable_partial", className: "bg-amber-100 text-amber-800" },
+  poor: { key: "readable_poor", className: "bg-red-100 text-red-800" },
 };
 
-const MEDICATION_CONTEXT: Record<string, string> = {
-  prescribed: "Предписано",
-  during_stay: "По време на престоя",
-  previous: "Досегашна терапия",
+const MEDICATION_CONTEXT: Record<string, MessageKey> = {
+  prescribed: "med_ctx_prescribed",
+  during_stay: "med_ctx_during_stay",
+  previous: "med_ctx_previous",
 };
 
-const FLAG: Record<string, { label: string; className: string }> = {
-  high: { label: "Над нормата", className: "bg-amber-100 text-amber-800" },
-  low: { label: "Под нормата", className: "bg-amber-100 text-amber-800" },
-  abnormal: { label: "Извън нормата", className: "bg-amber-100 text-amber-800" },
-  normal: { label: "В норма", className: "bg-fill-hover text-ink-500" },
-  unknown: { label: "Без посочена норма", className: "bg-fill-hover text-ink-500" },
+const FLAG: Record<string, { key: MessageKey; className: string }> = {
+  high: { key: "flag_high", className: "bg-amber-100 text-amber-800" },
+  low: { key: "flag_low", className: "bg-amber-100 text-amber-800" },
+  abnormal: { key: "flag_abnormal", className: "bg-amber-100 text-amber-800" },
+  normal: { key: "flag_normal", className: "bg-fill-hover text-ink-500" },
+  unknown: { key: "flag_unknown", className: "bg-fill-hover text-ink-500" },
 };
 
 function Section({ title, count, children }: { title: string; count: number; children: React.ReactNode }) {
@@ -38,6 +39,7 @@ function Section({ title, count, children }: { title: string; count: number; chi
 
 /** What the document reader extracted, plus a notice that the file was sent to Claude. */
 export default function DocumentResults({ result }: { result: ToolResultData }) {
+  const t = useT();
   const doc = result.document;
   const readable = doc ? READABLE[doc.readable] : undefined;
   const flagged = (doc?.tests ?? []).filter((t) => t.flag !== "normal" && t.flag !== "unknown");
@@ -57,7 +59,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 <p className="break-words font-display text-sm font-bold leading-snug text-ink-900">
-                  {doc.document_type_label || "Медицински документ"}
+                  {doc.document_type_label || t("medical_document")}
                 </p>
                 {readable && (
                   <span
@@ -66,7 +68,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
                       readable.className,
                     )}
                   >
-                    {readable.label}
+                    {t(readable.key)}
                   </span>
                 )}
               </div>
@@ -77,7 +79,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
           </div>
 
           {doc.diagnoses.length > 0 && (
-            <Section title="Диагнози" count={doc.diagnoses.length}>
+            <Section title={t("diagnoses")} count={doc.diagnoses.length}>
               <ul className="grid gap-1.5">
                 {doc.diagnoses.map((d, i) => (
                   <li
@@ -97,7 +99,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
           )}
 
           {doc.medications.length > 0 && (
-            <Section title="Лекарства" count={doc.medications.length}>
+            <Section title={t("medications")} count={doc.medications.length}>
               <ul className="grid gap-1.5">
                 {doc.medications.map((m, i) => (
                   <li key={i} className="rounded-lg border border-line bg-fill px-3 py-2">
@@ -107,7 +109,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
                         {m.dose && <span className="ml-1.5 font-normal text-ink-700">{m.dose}</span>}
                       </p>
                       {MEDICATION_CONTEXT[m.context] && (
-                        <span className="text-[11px] text-ink-400">{MEDICATION_CONTEXT[m.context]}</span>
+                        <span className="text-[11px] text-ink-400">{t(MEDICATION_CONTEXT[m.context])}</span>
                       )}
                     </div>
                     {(m.schedule || m.duration) && (
@@ -122,11 +124,11 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
           )}
 
           {doc.tests.length > 0 && (
-            <Section title="Изследвания" count={doc.tests.length}>
+            <Section title={t("tests")} count={doc.tests.length}>
               {/* Rows wrap instead of overflowing, so the flag never gets clipped on a phone. */}
               <ul className="overflow-hidden rounded-xl border border-line bg-fill text-[13px]">
-                {[...flagged, ...otherTests].map((t, i) => {
-                  const flag = FLAG[t.flag] ?? FLAG.unknown;
+                {[...flagged, ...otherTests].map((test, i) => {
+                  const flag = FLAG[test.flag] ?? FLAG.unknown;
                   return (
                     <li
                       key={i}
@@ -135,15 +137,15 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
                         i > 0 && "border-t border-line",
                       )}
                     >
-                      <span className="min-w-[7rem] flex-1 break-words text-ink-900">{t.name}</span>
+                      <span className="min-w-[7rem] flex-1 break-words text-ink-900">{test.name}</span>
                       <span className="whitespace-nowrap tabular-nums text-ink-900">
-                        <span className="font-semibold">{t.value}</span>
-                        {t.unit && <span className="ml-1 text-ink-500">{t.unit}</span>}
+                        <span className="font-semibold">{test.value}</span>
+                        {test.unit && <span className="ml-1 text-ink-500">{test.unit}</span>}
                       </span>
-                      {t.reference_range && (
+                      {test.reference_range && (
                         <span className="whitespace-nowrap tabular-nums text-ink-500 @lg:w-24 @lg:text-right">
-                          <span className="@lg:hidden">норма </span>
-                          {t.reference_range}
+                          <span className="@lg:hidden">{t("reference_range")} </span>
+                          {test.reference_range}
                         </span>
                       )}
                       <span
@@ -152,7 +154,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
                           flag.className,
                         )}
                       >
-                        {flag.label}
+                        {t(flag.key)}
                       </span>
                     </li>
                   );
@@ -162,7 +164,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
           )}
 
           {doc.recommendations.length > 0 && (
-            <Section title="Препоръки" count={doc.recommendations.length}>
+            <Section title={t("recommendations")} count={doc.recommendations.length}>
               <ul className="list-disc space-y-1 pl-5 text-[13px] leading-snug text-ink-700 marker:text-ink-400">
                 {doc.recommendations.map((r, i) => (
                   <li key={i} className="break-words">
@@ -175,7 +177,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
 
           {doc.unreadable_parts.length > 0 && (
             <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[12.5px] leading-snug text-amber-900">
-              Неразчетени части: {doc.unreadable_parts.join("; ")}.
+              {t("unreadable_parts", { parts: doc.unreadable_parts.join("; ") })}
             </p>
           )}
         </>
@@ -184,11 +186,7 @@ export default function DocumentResults({ result }: { result: ToolResultData }) 
       <p className="flex items-start gap-2 text-[12px] leading-snug text-ink-500">
         <CloudUpload className="mt-px size-3.5 shrink-0 text-ink-400" />
         <span>
-          {result.sent_to_claude
-            ? "За да бъде разчетен, файлът беше изпратен към Claude API (Anthropic) заедно с всичко, което се вижда на него. Името, ЕГН и адресът не се извличат и не се показват тук. "
-            : "Файлът не беше изпратен за разчитане. "}
-          Разчитането е автоматично и може да съдържа грешки: сверете дозите и стойностите с оригинала.
-          Това не е медицинско заключение.
+          {result.sent_to_claude ? t("doc_sent_to_claude") : t("doc_not_sent")} {t("doc_accuracy")}
         </span>
       </p>
     </div>

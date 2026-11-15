@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
-import { FlaskConical, ShieldOff, Trash2, Wrench } from "lucide-react";
+import { Check, FlaskConical, Languages, Palette, ShieldOff, Trash2, Wrench } from "lucide-react";
 
+import { useT, type MessageKey } from "@/lib/i18n";
+import { LANGUAGE_OPTIONS, THEME_OPTIONS, type ThemeOption } from "@/lib/preferences";
 import type { Health, Settings } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -16,20 +18,20 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 
-const YOLO_LABELS: Record<Health["yolo"]["status"], string> = {
-  ready: "Медицински модел: наличен",
-  not_configured: "Моделът не е конфигуриран",
-  weights_missing: "Файлът с теглата не е намерен",
-  incompatible: "Теглата не са медицински модел",
-  error: "Грешка при зареждане на модела",
+const YOLO_LABELS: Record<Health["yolo"]["status"], MessageKey> = {
+  ready: "yolo_ready",
+  not_configured: "yolo_not_configured",
+  weights_missing: "yolo_weights_missing",
+  incompatible: "yolo_incompatible",
+  error: "yolo_error",
 };
 
-const TRIAGE_LABELS: Record<NonNullable<Health["image_triage"]>["status"], string> = {
-  ready: "Локален модел: наличен",
-  loading: "Зарежда се...",
-  disabled: "Изключено на сървъра",
-  not_installed: "Библиотеката не е инсталирана",
-  error: "Грешка при зареждане на модела",
+const TRIAGE_LABELS: Record<NonNullable<Health["image_triage"]>["status"], MessageKey> = {
+  ready: "triage_ready",
+  loading: "triage_loading",
+  disabled: "triage_disabled",
+  not_installed: "triage_not_installed",
+  error: "triage_error",
 };
 
 function StatusRow({ label, value, ok }: { label: string; value: string; ok: boolean | null }) {
@@ -43,13 +45,37 @@ function StatusRow({ label, value, ok }: { label: string; value: string; ok: boo
             ok === null
               ? "bg-slate-300"
               : ok
-                ? "bg-teal-500 shadow-[0_0_0_3px_rgb(20_184_166/0.18)]"
-                : "bg-amber-500 shadow-[0_0_0_3px_rgb(245_158_11/0.18)]",
+                ? "bg-teal-500 shadow-[0_0_0_3px_rgb(var(--rgb-ok)/0.18)]"
+                : "bg-amber-500 shadow-[0_0_0_3px_rgb(var(--rgb-warn)/0.18)]",
           )}
         />
         {value}
       </span>
     </div>
+  );
+}
+
+/** A miniature of the theme: page, a card on it, and its two accent colours. */
+function ThemeSwatch({ swatch }: { swatch: ThemeOption["swatch"] }) {
+  return (
+    <span
+      className="relative block h-14 w-full overflow-hidden rounded-lg ring-1 ring-black/40"
+      style={{ background: swatch.base }}
+      aria-hidden
+    >
+      <span className="absolute left-2 top-2 size-2 rounded-full" style={{ background: swatch.accent }} />
+      <span className="absolute left-[18px] top-2 size-2 rounded-full" style={{ background: swatch.alt }} />
+      <span
+        className="absolute inset-x-2 bottom-2 top-[22px] rounded-md"
+        style={{ background: swatch.card, boxShadow: `inset 0 0 0 1px rgb(255 255 255 / 0.08)` }}
+      >
+        <span
+          className="absolute left-2 top-2 h-1 w-7 rounded-full"
+          style={{ background: swatch.accent, opacity: 0.9 }}
+        />
+        <span className="absolute left-2 top-[18px] h-1 w-10 rounded-full bg-white/25" />
+      </span>
+    </span>
   );
 }
 
@@ -78,6 +104,7 @@ export default function SettingsDialog({
   onClearHistory,
   conversationCount,
 }: Props) {
+  const t = useT();
   const [confirming, setConfirming] = useState(false);
   const yoloReady = health?.yolo.status === "ready";
   const demoAllowed = Boolean(health?.yolo.demo_mode_allowed) && !yoloReady;
@@ -93,59 +120,160 @@ export default function SettingsDialog({
     >
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Настройки</DialogTitle>
-          <DialogDescription>Състояние на системата, демо режим и поверителност.</DialogDescription>
+          <DialogTitle>{t("settings")}</DialogTitle>
+          <DialogDescription>{t("settings_description")}</DialogDescription>
         </DialogHeader>
 
         <DialogBody className="space-y-6">
           <section>
-            <h3 className="eyebrow">
-              Състояние
-            </h3>
+            <h3 className="eyebrow">{t("section_appearance")}</h3>
+            <div className="mt-2 space-y-4 rounded-xl border border-line bg-fill p-4">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <span className="flex items-start gap-2.5">
+                  <Languages className="mt-0.5 size-4 shrink-0 text-ink-500" />
+                  <span>
+                    <span id="language-label" className="block text-sm font-semibold text-ink-900">
+                      {t("language")}
+                    </span>
+                    <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-500">
+                      {t("language_hint")}
+                    </span>
+                  </span>
+                </span>
+                <div
+                  role="radiogroup"
+                  aria-labelledby="language-label"
+                  className="grid shrink-0 grid-cols-2 gap-1 rounded-xl border border-line bg-surface/60 p-1"
+                >
+                  {LANGUAGE_OPTIONS.map((option) => {
+                    const selected = settings.language === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        lang={option.value}
+                        onClick={() => onSettingsChange({ ...settings, language: option.value })}
+                        className={cn(
+                          "focus-ring h-8 min-w-24 rounded-lg px-3 text-[13px] font-medium transition-[background-color,color,box-shadow,scale] duration-200 ease-out-quart active:scale-[0.97]",
+                          selected
+                            ? "bg-primary text-black shadow-sm"
+                            : "text-ink-700 hover:bg-fill-hover hover:text-ink-900",
+                        )}
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="border-t border-line pt-4">
+                <span className="flex items-start gap-2.5">
+                  <Palette className="mt-0.5 size-4 shrink-0 text-ink-500" />
+                  <span>
+                    <span id="theme-label" className="block text-sm font-semibold text-ink-900">
+                      {t("theme")}
+                    </span>
+                    <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-500">
+                      {t("theme_hint")}
+                    </span>
+                  </span>
+                </span>
+                <div role="radiogroup" aria-labelledby="theme-label" className="mt-3 grid grid-cols-3 gap-2">
+                  {THEME_OPTIONS.map((option) => {
+                    const selected = settings.theme === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => onSettingsChange({ ...settings, theme: option.value })}
+                        className={cn(
+                          "focus-ring group relative rounded-xl border p-2 text-left transition-[border-color,background-color,box-shadow,translate] duration-300 ease-out-quart hover:-translate-y-0.5 active:translate-y-0",
+                          selected
+                            ? "border-brand-400/70 bg-fill-hover shadow-[0_0_0_3px_rgb(var(--rgb-glow-1)/0.14)]"
+                            : "border-line bg-surface/40 hover:border-line-strong hover:bg-fill-hover",
+                        )}
+                      >
+                        <ThemeSwatch swatch={option.swatch} />
+                        <span className="mt-2 flex items-center justify-between gap-1">
+                          <span className="truncate text-[13px] font-semibold text-ink-900">
+                            {t(`theme_${option.value}`)}
+                          </span>
+                          <span
+                            className={cn(
+                              "flex size-4 shrink-0 items-center justify-center rounded-full transition-[background-color,scale] duration-200 ease-spring",
+                              selected ? "scale-100 bg-brand-400 text-black" : "scale-0 bg-transparent",
+                            )}
+                            aria-hidden
+                          >
+                            <Check className="size-3" strokeWidth={3} />
+                          </span>
+                        </span>
+                        <span className="mt-0.5 hidden text-[11px] leading-snug text-ink-500 sm:block">
+                          {t(`theme_${option.value}_hint`)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <h3 className="eyebrow">{t("section_status")}</h3>
             <div className="mt-2 divide-y divide-line rounded-xl border border-line bg-fill px-4">
               <StatusRow
-                label="Сървър"
-                value={backendDown ? "Няма връзка" : health ? "Работи" : "Проверка..."}
+                label={t("status_server")}
+                value={
+                  backendDown
+                    ? t("status_no_connection")
+                    : health
+                      ? t("status_running")
+                      : t("status_checking")
+                }
                 ok={backendDown ? false : health ? true : null}
               />
               <StatusRow
-                label="Claude API"
+                label={t("status_claude")}
                 value={
                   health
                     ? health.claude_configured
                       ? health.claude_model
-                      : "Липсва API ключ"
-                    : "Няма данни"
+                      : t("status_missing_key")
+                    : t("status_no_data")
                 }
                 ok={health ? health.claude_configured : null}
               />
               <StatusRow
-                label="X-ray Analyzer"
-                value={health ? YOLO_LABELS[health.yolo.status] : "Няма данни"}
+                label={t("status_xray")}
+                value={health ? t(YOLO_LABELS[health.yolo.status]) : t("status_no_data")}
                 ok={health ? yoloReady : null}
               />
               <StatusRow
-                label="Разпознаване на снимки"
-                value={triage ? TRIAGE_LABELS[triage.status] : "Няма данни"}
+                label={t("status_triage")}
+                value={triage ? t(TRIAGE_LABELS[triage.status]) : t("status_no_data")}
                 ok={!triage ? null : triage.status === "ready" ? true : triage.status === "loading" ? null : false}
               />
             </div>
             {health && yoloReady && health.yolo.classes.length > 0 && (
               <p className="mt-2 text-[12px] leading-relaxed text-ink-500">
-                Класове на модела: {health.yolo.classes.join(", ")}
+                {t("model_classes", { classes: health.yolo.classes.join(", ") })}
               </p>
             )}
           </section>
 
           <section>
-            <h3 className="eyebrow">
-              Демо режим
-            </h3>
+            <h3 className="eyebrow">{t("section_demo")}</h3>
             <div
               className={cn(
                 "mt-2 rounded-xl border p-4 transition-[border-color,background-color,box-shadow] duration-300 ease-out-quart",
                 settings.demoMode && demoAllowed
-                  ? "border-amber-200 bg-amber-50/60 shadow-[0_0_0_3px_rgb(245_158_11/0.06)]"
+                  ? "border-amber-200 bg-amber-50/60 shadow-[0_0_0_3px_rgb(var(--rgb-warn)/0.06)]"
                   : "border-line bg-fill",
               )}
             >
@@ -153,12 +281,9 @@ export default function SettingsDialog({
                 <label htmlFor="demo-mode" className="flex cursor-pointer items-start gap-2.5">
                   <FlaskConical className="mt-0.5 size-4 shrink-0 text-amber-600" />
                   <span>
-                    <span className="block text-sm font-semibold text-ink-900">
-                      Симулиран анализ на снимки
-                    </span>
+                    <span className="block text-sm font-semibold text-ink-900">{t("demo_title")}</span>
                     <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-500">
-                      За тестване на интерфейса, когато липсва медицински модел. Резултатите са
-                      случайни, ясно обозначени като „Демо“ и нямат медицинско значение.
+                      {t("demo_text")}
                     </span>
                   </span>
                 </label>
@@ -171,27 +296,24 @@ export default function SettingsDialog({
               </div>
               {!demoAllowed && health && (
                 <p className="mt-2.5 text-[12px] text-ink-500">
-                  {yoloReady
-                    ? "Недостъпен: конфигуриран е реален медицински модел."
-                    : "Демо режимът е изключен на сървъра."}
+                  {yoloReady ? t("demo_unavailable_real") : t("demo_unavailable_server")}
                 </p>
               )}
             </div>
           </section>
 
           <section>
-            <h3 className="eyebrow">Изглед</h3>
+            <h3 className="eyebrow">{t("section_view")}</h3>
             <div className="mt-2 rounded-xl border border-line bg-fill p-4">
               <div className="flex items-start justify-between gap-4">
                 <label htmlFor="show-tools" className="flex cursor-pointer items-start gap-2.5">
                   <Wrench className="mt-0.5 size-4 shrink-0 text-ink-500" />
                   <span>
                     <span className="block text-sm font-semibold text-ink-900">
-                      Показвай работата на инструментите
+                      {t("show_tools_title")}
                     </span>
                     <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-500">
-                      Карти със статус и сурови данни от всяка проверка: рентген, лекарства, лекари,
-                      документи. Изключено: виждате само отговора на MedAI.
+                      {t("show_tools_text")}
                     </span>
                   </span>
                 </label>
@@ -207,23 +329,13 @@ export default function SettingsDialog({
           </section>
 
           <section>
-            <h3 className="eyebrow">
-              Поверителност
-            </h3>
-            <p className="mt-2 text-[13px] leading-relaxed text-ink-500">
-              Историята се пази само в този раздел на браузъра (sessionStorage). Съобщенията се
-              обработват от Claude API. Рентгеновите снимки се анализират локално на сървъра.
-              Документ, който поискате да бъде разчетен, се изпраща към Claude API. Качените
-              файлове се изтриват автоматично. При търсене на лекар към superdoc.bg се изпращат само специалността и
-              населеното място, а при справка за лекарство към framar.bg се изпраща само името му.
-            </p>
+            <h3 className="eyebrow">{t("section_privacy")}</h3>
+            <p className="mt-2 text-[13px] leading-relaxed text-ink-500">{t("privacy_text")}</p>
 
             <div className="mt-3 flex flex-col gap-2">
               {confirming ? (
                 <div className="animate-pop rounded-xl border border-red-200 bg-red-50 p-3.5">
-                  <p className="text-sm font-medium text-red-900">
-                    Да се изтрият ли всички разговори и качени снимки? Действието е необратимо.
-                  </p>
+                  <p className="text-sm font-medium text-red-900">{t("confirm_delete")}</p>
                   <div className="mt-3 flex gap-2">
                     <Button
                       variant="destructive"
@@ -234,10 +346,10 @@ export default function SettingsDialog({
                         setConfirming(false);
                       }}
                     >
-                      Да, изтрий всичко
+                      {t("confirm_delete_yes")}
                     </Button>
                     <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>
-                      Отказ
+                      {t("cancel")}
                     </Button>
                   </div>
                 </div>
@@ -249,7 +361,7 @@ export default function SettingsDialog({
                   disabled={conversationCount === 0}
                 >
                   <Trash2 className="size-4" />
-                  Изтрий цялата история
+                  {t("delete_history")}
                   {conversationCount > 0 && (
                     <span className="ml-auto text-xs font-normal text-red-400">
                       {conversationCount}
@@ -265,7 +377,7 @@ export default function SettingsDialog({
                 disabled={!consent}
               >
                 <ShieldOff className="size-4" />
-                {consent ? "Оттегли съгласието за обработка" : "Съгласието не е дадено"}
+                {consent ? t("revoke_consent") : t("consent_not_given")}
               </Button>
             </div>
           </section>

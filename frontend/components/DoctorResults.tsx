@@ -2,6 +2,7 @@
 
 import { CalendarClock, ExternalLink, MapPin, Star } from "lucide-react";
 
+import { useT } from "@/lib/i18n";
 import type { ToolResultData } from "@/lib/types";
 
 /** Only ever link to Superdoc itself, whatever the data says. */
@@ -15,15 +16,16 @@ function safeUrl(url: string | null | undefined): string | null {
   }
 }
 
-function initials(name: string): string {
+function initials(name: string, fallback: string): string {
   const words = name
     .replace(/^(д-р|доц\.?|проф\.?|dr\.?)\s+/giu, "")
     .split(/\s+/)
     .filter(Boolean);
-  return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || "Д";
+  return ((words[0]?.[0] ?? "") + (words[1]?.[0] ?? "")).toUpperCase() || fallback;
 }
 
 export default function DoctorResults({ result }: { result: ToolResultData }) {
+  const t = useT();
   const doctors = result.doctors ?? [];
   const searchUrl = safeUrl(result.search_url);
   const query = result.query;
@@ -32,14 +34,14 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
     <div className="animate-fade space-y-3 border-t border-line p-4">
       {query && (
         <p className="text-[13px] text-ink-500">
-          Търсене: <span className="font-semibold text-ink-900">{query.specialty}</span>
+          {t("search_label")} <span className="font-semibold text-ink-900">{query.specialty}</span>
           {query.city ? (
             <>
               {" "}
-              в <span className="font-semibold text-ink-900">{query.city}</span>
+              {t("search_in")} <span className="font-semibold text-ink-900">{query.city}</span>
             </>
           ) : (
-            " в цяла България"
+            ` ${t("search_all_bulgaria")}`
           )}
         </p>
       )}
@@ -57,7 +59,7 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
                   className="flex size-10 shrink-0 items-center justify-center rounded-full bg-fill-hover font-display text-sm font-bold text-ink-900 ring-1 ring-line"
                   aria-hidden
                 >
-                  {initials(doctor.name)}
+                  {initials(doctor.name, t("initials_fallback"))}
                 </span>
 
                 <div className="min-w-0 flex-1">
@@ -65,7 +67,7 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
                     <p className="font-display text-sm font-bold text-ink-900">{doctor.name}</p>
                     {doctor.sponsored && (
                       <span className="rounded-md bg-fill-hover px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-500">
-                        Спонсориран
+                        {t("sponsored")}
                       </span>
                     )}
                   </div>
@@ -77,7 +79,9 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
                         <Star className="size-3.5 fill-amber-400 text-amber-400" />
                         <span className="font-semibold tabular-nums">{doctor.rating.toFixed(1)}</span>
                         {doctor.reviews_count !== null && (
-                          <span className="text-ink-400">({doctor.reviews_count} оценки)</span>
+                          <span className="text-ink-400">
+                            {t("reviews_count", { count: doctor.reviews_count })}
+                          </span>
                         )}
                       </span>
                     )}
@@ -90,7 +94,7 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
                     {doctor.next_available && (
                       <span className="inline-flex items-center gap-1 text-teal-700">
                         <CalendarClock className="size-3.5" />
-                        Най-ранен час: {doctor.next_available}
+                        {t("earliest_slot", { when: doctor.next_available })}
                       </span>
                     )}
                   </div>
@@ -102,9 +106,9 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     className="fx-primary focus-ring inline-flex shrink-0 items-center gap-1.5 self-center rounded-lg bg-primary px-3 py-2 text-[12.5px] font-semibold text-black hover:bg-primary-hover active:scale-[0.97]"
-                    aria-label={`Профил на ${doctor.name} в Superdoc`}
+                    aria-label={t("doctor_profile", { name: doctor.name })}
                   >
-                    <span className="@max-lg:hidden">Запази час</span>
+                    <span className="@max-lg:hidden">{t("book")}</span>
                     <ExternalLink className="size-3.5" />
                   </a>
                 )}
@@ -121,16 +125,12 @@ export default function DoctorResults({ result }: { result: ToolResultData }) {
           rel="noopener noreferrer"
           className="focus-ring inline-flex items-center gap-1.5 rounded-sm text-[13px] font-semibold text-brand-300 underline-offset-2 transition-colors duration-200 hover:text-brand-400 hover:underline"
         >
-          Виж всички резултати в Superdoc
+          {t("all_results_superdoc")}
           <ExternalLink className="size-3.5" />
         </a>
       )}
 
-      <p className="text-[12px] leading-snug text-ink-500">
-        Данните са от публичните страници на superdoc.bg към момента на търсенето. Оценките са от
-        потребители на Superdoc и не измерват качеството на лечение. MedAI не е свързан със Superdoc
-        и не препоръчва конкретен лекар.
-      </p>
+      <p className="text-[12px] leading-snug text-ink-500">{t("doctors_disclaimer")}</p>
     </div>
   );
 }

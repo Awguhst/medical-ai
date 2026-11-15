@@ -33,8 +33,9 @@ from typing import Any, AsyncIterator
 import anthropic
 
 from config import Settings, get_settings
+from i18n import DEFAULT_LANGUAGE, tr
 from models.schemas import ChatRequest
-from prompts.medical_system_prompt import MEDICAL_SYSTEM_PROMPT
+from prompts.medical_system_prompt import ENGLISH_INTERFACE_PROMPT, MEDICAL_SYSTEM_PROMPT
 from services.image_service import ImageRecord, ImageStore, get_image_store
 from services.safety_service import clean_text, detect_emergency, log_ref
 from services.tool_registry import ToolContext, ToolRegistry, get_registry
@@ -172,6 +173,7 @@ def build_messages(
     store: ImageStore,
     settings: Settings,
     available_tools: set[str] | None = None,
+    language: str = DEFAULT_LANGUAGE,
 ) -> list[dict[str, Any]]:
     conv = request.conversation_id
     history = request.history[-settings.max_history_messages :]
@@ -196,7 +198,7 @@ def build_messages(
         ids = attachment_ids[: settings.max_attachments_per_message]
         if ids:
             parts.append(_attachments_block(ids, store, session_id, conv, available_tools))
-        parts.append(text or "(Потребителят изпрати съобщение без текст.)")
+        parts.append(text or tr(language, "empty_user_message"))
         messages.append({"role": "user", "content": "\n\n".join(parts)})
 
     return messages
@@ -205,7 +207,9 @@ def build_messages(
 # --- request parameters -----------------------------------------------------
 
 
-def _request_kwargs(settings: Settings, registry: ToolRegistry) -> tuple[bool, dict[str, Any]]:
+def _request_kwargs(
+    settings: Settings, registry: ToolRegistry, language: str = DEFAULT_LANGUAGE
+) -> tuple[bool, dict[str, Any]]:
     kwargs: dict[str, Any] = {
         "model": settings.anthropic_model,
         "max_tokens": settings.anthropic_max_tokens,
@@ -219,6 +223,9 @@ def _request_kwargs(settings: Settings, registry: ToolRegistry) -> tuple[bool, d
         ],
         "tools": registry.api_schemas(),
     }
+    if language == "en":
+        # After the cache breakpoint, so the cached prefix stays byte-identical.
+        kwargs["system"].append({"type": "text", "text": ENGLISH_INTERFACE_PROMPT})
     if settings.anthropic_effort:
         kwargs["output_config"] = {"effort": settings.anthropic_effort}
 
@@ -235,60 +242,49 @@ def _error_event(code: str, message: str) -> dict[str, Any]:
     return {"type": "error", "code": code, "message": message}
 
 
-def _api_error_event(exc: Exception, settings: Settings) -> dict[str, Any]:
-    """Map SDK exceptions to user-facing Bulgarian messages (most specific first)."""
+def _api_error_event(exc: Exception, settings: Settings, language: str = DEFAULT_LANGUAGE) -> dict[str, Any]:
+    """Map SDK exceptions to user-facing messages in the interface language (most specific first)."""
     if isinstance(exc, anthropic.AuthenticationError):
-        return _error_event(
-            "claude_auth", "Невалиден API ключ за Claude. Проверете ANTHROPIC_API_KEY на сървъра."
-        )
-    if isinstance(exc, anthropic.PermissionDeniedError):
-        return _error_event(
-            "claude_permission", "API ключът няма достъп до избрания Claude модел."
-        )
-    if isinstance(exc, anthropic.NotFoundError):
+        code = "claude_auth"
+    elif isinstance(exc, anthropic.PermissionDeniedError):
+        code = "claude_permission"
+    elif isinstance(exc, anthropic.NotFoundError):
         return _error_event(
             "claude_model_not_found",
-            f"Моделът „{settings.anthropic_model}“ не е намерен. Проверете ANTHROPIC_MODEL.",
+            tr(language, "claude_model_not_found", model=settings.anthropic_model),
         )
-    if isinstance(exc, anthropic.RateLimitError):
-        return _error_event(
-            "claude_rate_limited", "Твърде много заявки към Claude. Опитайте отново след малко."
-        )
-    if isinstance(exc, anthropic.BadRequestError):
-        return _error_event(
-            "claude_bad_request",
-            "Claude отхвърли заявката. Проверете конфигурацията на модела на сървъра.",
-        )
-    if isinstance(exc, anthropic.APITimeoutError):
-        return _error_event("claude_timeout", "Claude не отговори навреме. Опитайте отново.")
-    if isinstance(exc, anthropic.APIConnectionError):
-        return _error_event(
-            "claude_unreachable", "Няма връзка с Claude API. Проверете интернет връзката на сървъра."
-        )
-    if isinstance(exc, anthropic.APIStatusError):
-        if exc.status_code >= 500:
-            return _error_event(
-                "claude_unavailable", "Claude API е временно недостъпен. Опитайте отново след малко."
-            )
-        return _error_event("claude_error", "Възникна грешка при заявката към Claude.")
-    return _error_event("internal_error", "Възникна неочаквана грешка на сървъра.")
+    elif isinstance(exc, anthropic.RateLimitError):
+        code = "claude_rate_limited"
+    elif isinstance(exc, anthropic.BadRequestError):
+        code = "claude_bad_request"
+    elif isinstance(exc, anthropic.APITimeoutError):
+        code = "claude_timeout"
+    elif isinstance(exc, anthropic.APIConnectionError):
+        code = "claude_unreachable"
+    elif isinstance(exc, anthropic.APIStatusError):
+        code = "claude_unavailable" if exc.status_code >= 500 else "claude_error"
+    else:
+        code = "internal_error"
+    return _error_event(code, tr(language, code))
 
 
 # --- main loop ----------------------------------------------------------------
 
 
-async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[dict[str, Any]]:
+async def stream_chat(
+    request: ChatRequest, session_id: str, language: str = DEFAULT_LANGUAGE
+) -> AsyncIterator[dict[str, Any]]:
     settings = get_settings()
     registry = get_registry()
     store = get_image_store()
     conv = request.conversation_id
-    ctx = ToolContext(session_id, conv, request.demo_mode, settings)
+    ctx = ToolContext(session_id, conv, request.demo_mode, settings, language)
 
     # Deterministic safety net: show the 112 banner before the model answers.
     if detect_emergency(request.message.text):
         yield {"type": "emergency"}
 
-    messages = build_messages(request, session_id, store, settings, set(registry.names()))
+    messages = build_messages(request, session_id, store, settings, set(registry.names()), language)
 
     # New uploads recognised as X-rays: run the detector now, stream the card
     # to the browser, and give Claude the result as an already completed call.
@@ -300,8 +296,8 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
             "type": "tool_start",
             "tool_use_id": tool_use_id,
             "tool_name": "analyze_xray",
-            "label": spec.ui_label if spec else "analyze_xray",
-            "running_text": spec.ui_running_text if spec else "",
+            "label": spec.label(language) if spec else "analyze_xray",
+            "running_text": spec.running_text(language) if spec else "",
         }
         outcome = await registry.execute("analyze_xray", {"image_id": record.image_id}, ctx)
         result_id = store.store_tool_result(session_id, conv, "analyze_xray", outcome.payload)
@@ -317,7 +313,7 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
         current = messages[-1]  # the user turn being answered; always text content
         messages[-1] = {"role": "user", "content": "\n\n".join(app_blocks) + "\n\n" + str(current["content"])}
 
-    use_fallback, kwargs = _request_kwargs(settings, registry)
+    use_fallback, kwargs = _request_kwargs(settings, registry, language)
     client = get_client()
     streamer = client.beta.messages.stream if use_fallback else client.messages.stream
 
@@ -344,11 +340,11 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
                 "Claude API error: %s status=%s msg=%s",
                 type(exc).__name__, status, str(getattr(exc, "message", ""))[:300],
             )
-            yield _api_error_event(exc, settings)
+            yield _api_error_event(exc, settings, language)
             return
         except Exception as exc:  # noqa: BLE001
             logger.error("chat stream failed: %s", type(exc).__name__)
-            yield _api_error_event(exc, settings)
+            yield _api_error_event(exc, settings, language)
             return
 
         stop_reason = final.stop_reason
@@ -357,10 +353,7 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
             yield {
                 "type": "notice",
                 "code": "refusal",
-                "message": (
-                    "Моделът отказа да отговори на тази заявка поради вградените си "
-                    "правила за безопасност. Опитайте да я формулирате по друг начин."
-                ),
+                "message": tr(language, "notice.refusal"),
             }
             break
 
@@ -376,7 +369,7 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
             yield {
                 "type": "notice",
                 "code": "max_tokens",
-                "message": "Отговорът беше прекъснат, защото достигна максималната дължина.",
+                "message": tr(language, "notice.max_tokens"),
             }
             break
 
@@ -393,8 +386,8 @@ async def stream_chat(request: ChatRequest, session_id: str) -> AsyncIterator[di
                 "type": "tool_start",
                 "tool_use_id": block.id,
                 "tool_name": block.name if spec else "unknown",
-                "label": spec.ui_label if spec else "Непознат инструмент",
-                "running_text": spec.ui_running_text if spec else "",
+                "label": spec.label(language) if spec else tr(language, "tool.unknown_label"),
+                "running_text": spec.running_text(language) if spec else "",
             }
             outcome = await registry.execute(block.name, block.input, ctx)
             result_id = store.store_tool_result(

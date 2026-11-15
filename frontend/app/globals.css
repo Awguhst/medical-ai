@@ -5,9 +5,14 @@
   --font-sans: "Golos Text Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-display: "Manrope Variable", "Golos Text Variable", ui-sans-serif, system-ui, sans-serif;
 
-  /* Neutral near-black theme: black chrome, grey translucent fills, light-grey
-     text and a near-white primary action. Low steps of each scale are dark
-     fills, high steps are light text, so "bg-x-50 text-x-900" stays readable. */
+  /* Graphite, the default theme: black chrome, grey translucent fills,
+     light-grey text, a blue accent and a near-white primary action. Low steps
+     of each scale are dark fills, high steps are light text, so
+     "bg-x-50 text-x-900" stays readable.
+
+     Every colour a component uses is one of these variables, so a theme is
+     only a set of values: Ember and Dusk override them under [data-theme]
+     further down, after the effect tokens. */
 
   /* Primary action: near-white with black text */
   --color-primary: #eeeeee;
@@ -24,6 +29,9 @@
   --color-brand-700: #4cb3ff;
   --color-brand-800: #1765ad;
   --color-brand-900: #164c7e;
+  /* Second accent, paired with the brand colour in the logo, gradients and
+     toggles: teal here, gold on Ember, apricot on Dusk. */
+  --color-brand-alt: #14b8a6;
 
   /* Surfaces: sidebar chrome < page < cards */
   --color-base: #0d0d0d;
@@ -42,21 +50,33 @@
   --color-ink-500: #8f8f8f;
   --color-ink-400: #6b6b6b;
 
-  /* Status tints */
+  /* Status tints: amber = warning and demo, red = danger, teal = success,
+     slate = neutral grey (toggle tracks, idle dots). */
   --color-amber-50: #1f1809;
   --color-amber-100: #2b210b;
   --color-amber-200: #4a3610;
+  --color-amber-400: #fcbb00;
+  --color-amber-500: #f99c00;
+  --color-amber-600: #dd7400;
   --color-amber-700: #fbbf24;
   --color-amber-800: #fcd34d;
   --color-amber-900: #fde68a;
   --color-red-50: #211012;
   --color-red-100: #2e1417;
   --color-red-200: #4f1d22;
+  --color-red-300: #ffa3a3;
+  --color-red-400: #ff6568;
+  --color-red-500: #fb2c36;
+  --color-red-600: #e40014;
   --color-red-700: #fca5a5;
   --color-red-800: #fecaca;
   --color-red-900: #fee2e2;
   --color-teal-50: #0b1f1d;
   --color-teal-100: #0f2c29;
+  --color-teal-300: #46ecd5;
+  --color-teal-400: #00d3bd;
+  --color-teal-500: #00baa7;
+  --color-teal-600: #009588;
   --color-teal-700: #5eead4;
   --color-teal-800: #99f6e4;
   --color-slate-100: #1a1a1a;
@@ -83,8 +103,8 @@
     0 18px 40px -12px rgb(0 0 0 / 0.6),
     0 56px 120px -32px rgb(0 0 0 / 0.85);
   --shadow-glow:
-    0 0 0 1px rgb(76 179 255 / 0.28),
-    0 10px 36px -10px rgb(76 179 255 / 0.4);
+    0 0 0 1px rgb(var(--rgb-glow-1) / 0.28),
+    0 10px 36px -10px rgb(var(--rgb-glow-1) / 0.4);
 
   --animate-rise: rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both;
   --animate-fade: fade 0.25s ease-out both;
@@ -189,6 +209,196 @@
   }
 }
 
+/* ---- Effect tokens -------------------------------------------------------- */
+
+/* Colours the effects below (and a few arbitrary values in components) mix
+   with their own alpha, as RGB triplets: rgb(var(--rgb-glow-1) / 0.3). Plus
+   the few surfaces that are not Tailwind utilities. Themes override these
+   together with the @theme colours. */
+:root {
+  --rgb-glow-1: 54 158 255; /* the brand colour: aurora, halo, focus glow, selection */
+  --rgb-glow-2: 168 85 247; /* its companion in the aurora and the card edge */
+  --rgb-alt: 45 212 191; /* the second accent (teal), as a glow */
+  --rgb-primary: 255 255 255; /* light tint for sheens, bubbles and the primary button's glow */
+  --rgb-ok: 20 184 166;
+  --rgb-warn: 245 158 11;
+  --rgb-danger: 239 68 68;
+
+  --color-ink-max: #ffffff; /* brightest text, top of the headline gradient */
+  --color-ink-800: #d4d4d4; /* body text in markdown replies */
+
+  --glass-bg: rgb(22 22 22 / 0.72);
+  --glass-bg-focus: rgb(24 24 24 / 0.8);
+  --glass-bg-drag: rgb(24 24 24 / 0.88);
+  --scrollbar-thumb: #2c2c2c;
+  --scrollbar-thumb-hover: #444444;
+}
+
+/* ---- Themes --------------------------------------------------------------- */
+
+/* Ember: charcoal with a brown undertone, cream text, a copper accent and gold
+   as the second accent. Warnings stay amber (a yellow, away from the copper),
+   success turns to a warm sage. */
+:root[data-theme="ember"] {
+  --color-primary: #f6e8d8;
+  --color-primary-hover: #fff5ea;
+
+  --color-brand-50: #211813;
+  --color-brand-100: #2a1f18;
+  --color-brand-200: #3e2c22;
+  --color-brand-300: #ffb089;
+  --color-brand-400: #ff8f5e;
+  --color-brand-500: #f27a45;
+  --color-brand-600: #dd6532;
+  --color-brand-700: #ffb089;
+  --color-brand-800: #96421f;
+  --color-brand-900: #6b2f16;
+  --color-brand-alt: #f5c451;
+
+  --color-base: #15100d;
+  --color-surface: #0c0907;
+  --color-card: #1f1712;
+  --color-line: rgb(255 226 200 / 0.09);
+  --color-line-strong: rgb(255 226 200 / 0.16);
+  --color-fill: rgb(255 210 170 / 0.05);
+  --color-fill-hover: rgb(255 210 170 / 0.09);
+
+  --color-ink-900: #f1e6db;
+  --color-ink-700: #d6c8ba;
+  --color-ink-500: #a08f80;
+  --color-ink-400: #7a6b5e;
+
+  --color-amber-50: #241a08;
+  --color-amber-100: #2f2209;
+  --color-amber-200: #4e370f;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #fcc43a;
+  --color-amber-800: #fdd56a;
+  --color-amber-900: #fde9a5;
+  --color-red-50: #261210;
+  --color-red-100: #341614;
+  --color-red-200: #55221d;
+  --color-red-300: #ffa493;
+  --color-red-400: #ff6f5c;
+  --color-red-500: #f2452f;
+  --color-red-600: #d9341f;
+  --color-red-700: #ffa79a;
+  --color-red-800: #ffc8bf;
+  --color-red-900: #ffe1dc;
+  --color-teal-50: #141e10;
+  --color-teal-100: #1b2915;
+  --color-teal-300: #b5d796;
+  --color-teal-400: #a0c97c;
+  --color-teal-500: #86b55f;
+  --color-teal-600: #6f9c4b;
+  --color-teal-700: #c0dfa6;
+  --color-teal-800: #d7eac6;
+  --color-slate-100: #211a16;
+  --color-slate-200: #2e2520;
+  --color-slate-300: #45382f;
+  --color-slate-400: #7a6b5e;
+
+  --rgb-glow-1: 255 143 94;
+  --rgb-glow-2: 232 93 117;
+  --rgb-alt: 245 196 81;
+  --rgb-primary: 255 236 214;
+  --rgb-ok: 134 181 95;
+  --rgb-warn: 245 158 11;
+  --rgb-danger: 242 69 47;
+
+  --color-ink-max: #fff8f0;
+  --color-ink-800: #ddd0c3;
+
+  --glass-bg: rgb(31 23 18 / 0.72);
+  --glass-bg-focus: rgb(35 26 20 / 0.8);
+  --glass-bg-drag: rgb(35 26 20 / 0.88);
+  --scrollbar-thumb: #3a2d25;
+  --scrollbar-thumb-hover: #54443a;
+}
+
+/* Dusk: deep plum, rosy text, a rose accent and apricot as the second accent.
+   Danger red is kept clearly redder than the rose; success is a soft green. */
+:root[data-theme="dusk"] {
+  --color-primary: #f7e6ef;
+  --color-primary-hover: #fff3f9;
+
+  --color-brand-50: #221420;
+  --color-brand-100: #2b1a28;
+  --color-brand-200: #3f2639;
+  --color-brand-300: #ff9db6;
+  --color-brand-400: #ff7d9d;
+  --color-brand-500: #f26688;
+  --color-brand-600: #de4f72;
+  --color-brand-700: #ff9db6;
+  --color-brand-800: #8e2f4a;
+  --color-brand-900: #652236;
+  --color-brand-alt: #f6b26b;
+
+  --color-base: #140d14;
+  --color-surface: #0b070c;
+  --color-card: #1e1421;
+  --color-line: rgb(255 214 235 / 0.09);
+  --color-line-strong: rgb(255 214 235 / 0.16);
+  --color-fill: rgb(255 200 230 / 0.05);
+  --color-fill-hover: rgb(255 200 230 / 0.09);
+
+  --color-ink-900: #f2e6ec;
+  --color-ink-700: #d7c8d1;
+  --color-ink-500: #a2909c;
+  --color-ink-400: #7b6b76;
+
+  --color-amber-50: #251a0e;
+  --color-amber-100: #30220f;
+  --color-amber-200: #4f3815;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-600: #d97706;
+  --color-amber-700: #fcc43a;
+  --color-amber-800: #fdd56a;
+  --color-amber-900: #fde9a5;
+  --color-red-50: #2a1114;
+  --color-red-100: #371518;
+  --color-red-200: #5a2026;
+  --color-red-300: #ff9f9f;
+  --color-red-400: #ff6262;
+  --color-red-500: #f23a3a;
+  --color-red-600: #dc2626;
+  --color-red-700: #ffa3a3;
+  --color-red-800: #ffc7c7;
+  --color-red-900: #ffe0e0;
+  --color-teal-50: #0f1f16;
+  --color-teal-100: #152a1d;
+  --color-teal-300: #8fd9a8;
+  --color-teal-400: #76cc92;
+  --color-teal-500: #5fbd7c;
+  --color-teal-600: #4aa567;
+  --color-teal-700: #a3e2b7;
+  --color-teal-800: #c4edd1;
+  --color-slate-100: #211722;
+  --color-slate-200: #2e2230;
+  --color-slate-300: #453546;
+  --color-slate-400: #7b6b76;
+
+  --rgb-glow-1: 255 125 157;
+  --rgb-glow-2: 168 85 247;
+  --rgb-alt: 246 178 107;
+  --rgb-primary: 255 230 240;
+  --rgb-ok: 95 189 124;
+  --rgb-warn: 245 158 11;
+  --rgb-danger: 242 58 58;
+
+  --color-ink-max: #fff6fb;
+  --color-ink-800: #ddd0d7;
+
+  --glass-bg: rgb(30 20 33 / 0.72);
+  --glass-bg-focus: rgb(34 23 37 / 0.8);
+  --glass-bg-drag: rgb(34 23 37 / 0.88);
+  --scrollbar-thumb: #3b2a3a;
+  --scrollbar-thumb-hover: #55415a;
+}
+
 /* ---- Utilities ---------------------------------------------------------- */
 
 /* One keyboard focus treatment for every interactive element. An outline
@@ -249,6 +459,9 @@ body {
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   -webkit-tap-highlight-color: transparent;
+  transition:
+    background-color 0.35s var(--ease-out-quart),
+    color 0.35s var(--ease-out-quart);
 }
 
 /* Manrope switches to Bulgarian-style Cyrillic letterforms under lang="bg",
@@ -276,13 +489,13 @@ h3 {
 }
 
 ::selection {
-  background: rgb(76 179 255 / 0.3);
+  background: rgb(var(--rgb-glow-1) / 0.3);
 }
 
 /* Slim, quiet scrollbars that brighten only while hovered */
 .scroll-quiet {
   scrollbar-width: thin;
-  scrollbar-color: #2c2c2c transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 .scroll-quiet::-webkit-scrollbar {
   width: 6px;
@@ -292,16 +505,31 @@ h3 {
   background: transparent;
 }
 .scroll-quiet::-webkit-scrollbar-thumb {
-  background: #2c2c2c;
+  background: var(--scrollbar-thumb);
   border-radius: 999px;
   transition: background-color 0.2s;
 }
 .scroll-quiet::-webkit-scrollbar-thumb:hover {
-  background: #444444;
+  background: var(--scrollbar-thumb-hover);
 }
 
-/* Markdown inside assistant bubbles */
+/* Markdown inside assistant bubbles. The typography plugin's inverted greys
+   are replaced with the theme's own inks, so replies match the rest of the
+   page on every theme. */
 .md {
+  --tw-prose-invert-body: var(--color-ink-800);
+  --tw-prose-invert-headings: var(--color-ink-900);
+  --tw-prose-invert-lead: var(--color-ink-700);
+  --tw-prose-invert-bold: var(--color-ink-900);
+  --tw-prose-invert-counters: var(--color-ink-500);
+  --tw-prose-invert-bullets: var(--color-ink-400);
+  --tw-prose-invert-hr: var(--color-line-strong);
+  --tw-prose-invert-quotes: var(--color-ink-900);
+  --tw-prose-invert-quote-borders: var(--color-line-strong);
+  --tw-prose-invert-captions: var(--color-ink-500);
+  --tw-prose-invert-code: var(--color-ink-900);
+  --tw-prose-invert-th-borders: var(--color-line-strong);
+  --tw-prose-invert-td-borders: var(--color-line);
   font-size: 0.9375rem;
   line-height: 1.7;
   overflow-wrap: anywhere;
@@ -360,15 +588,15 @@ h3 {
 }
 .fx-aurora::before {
   background:
-    radial-gradient(42rem 26rem at 20% 2%, rgb(54 158 255 / 0.3), transparent 70%),
-    radial-gradient(38rem 24rem at 80% 0%, rgb(168 85 247 / 0.26), transparent 70%),
-    radial-gradient(32rem 20rem at 50% -4%, rgb(45 212 191 / 0.18), transparent 70%);
+    radial-gradient(42rem 26rem at 20% 2%, rgb(var(--rgb-glow-1) / 0.3), transparent 70%),
+    radial-gradient(38rem 24rem at 80% 0%, rgb(var(--rgb-glow-2) / 0.26), transparent 70%),
+    radial-gradient(32rem 20rem at 50% -4%, rgb(var(--rgb-alt) / 0.18), transparent 70%);
   filter: blur(24px);
   animation: aurora 18s ease-in-out infinite alternate;
   will-change: transform, opacity;
 }
 .fx-aurora::after {
-  background-image: radial-gradient(rgb(255 255 255 / 0.07) 1px, transparent 1px);
+  background-image: radial-gradient(rgb(var(--rgb-primary) / 0.07) 1px, transparent 1px);
   background-size: 22px 22px;
   mask-image: radial-gradient(ellipse 70% 55% at 50% 0%, #000 20%, transparent 75%);
 }
@@ -386,14 +614,14 @@ h3 {
 /* The sidebar shares the page colour and picks up the edge of the same glow. */
 .fx-sidebar {
   background:
-    radial-gradient(26rem 15rem at 0% 0%, rgb(54 158 255 / 0.11), transparent 70%),
-    radial-gradient(22rem 14rem at 100% 100%, rgb(168 85 247 / 0.05), transparent 70%),
+    radial-gradient(26rem 15rem at 0% 0%, rgb(var(--rgb-glow-1) / 0.11), transparent 70%),
+    radial-gradient(22rem 14rem at 100% 100%, rgb(var(--rgb-glow-2) / 0.05), transparent 70%),
     var(--color-base);
 }
 
-/* Headline with a soft white-to-grey fade. */
+/* Headline with a soft fade from the brightest ink to the muted one. */
 .fx-title {
-  background: linear-gradient(180deg, #ffffff 30%, #8f8f8f 130%);
+  background: linear-gradient(180deg, var(--color-ink-max) 30%, var(--color-ink-500) 130%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
@@ -402,9 +630,9 @@ h3 {
 /* Coloured halo breathing behind the logo. */
 .fx-halo {
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.1),
-    0 0 44px 4px rgb(54 158 255 / 0.4),
-    0 0 90px 18px rgb(45 212 191 / 0.16);
+    0 0 0 1px rgb(var(--rgb-primary) / 0.1),
+    0 0 44px 4px rgb(var(--rgb-glow-1) / 0.4),
+    0 0 90px 18px rgb(var(--rgb-alt) / 0.16);
   animation:
     rise 0.45s cubic-bezier(0.16, 1, 0.3, 1) both,
     halo 4.5s ease-in-out 0.4s infinite alternate;
@@ -412,9 +640,9 @@ h3 {
 @keyframes halo {
   to {
     box-shadow:
-      0 0 0 1px rgb(255 255 255 / 0.14),
-      0 0 60px 10px rgb(168 85 247 / 0.36),
-      0 0 110px 26px rgb(54 158 255 / 0.2);
+      0 0 0 1px rgb(var(--rgb-primary) / 0.14),
+      0 0 60px 10px rgb(var(--rgb-glow-2) / 0.36),
+      0 0 110px 26px rgb(var(--rgb-glow-1) / 0.2);
   }
 }
 
@@ -423,13 +651,13 @@ h3 {
 .fx-glass,
 .fx-card {
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.06),
+    inset 0 1px 0 rgb(var(--rgb-primary) / 0.06),
     var(--shadow-soft);
 }
 
 /* Frosted composer that glows while focused. */
 .fx-glass {
-  background: rgb(22 22 22 / 0.72);
+  background: var(--glass-bg);
   backdrop-filter: blur(18px) saturate(160%);
   -webkit-backdrop-filter: blur(18px) saturate(160%);
   transition:
@@ -438,31 +666,31 @@ h3 {
     background-color 0.25s var(--ease-out-quart);
 }
 .fx-glass:hover {
-  border-color: rgb(255 255 255 / 0.14);
+  border-color: rgb(var(--rgb-primary) / 0.14);
 }
 .fx-glass:focus-within {
-  border-color: rgb(255 255 255 / 0.22);
-  background: rgb(24 24 24 / 0.8);
+  border-color: rgb(var(--rgb-primary) / 0.22);
+  background: var(--glass-bg-focus);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.08),
-    0 0 0 4px rgb(255 255 255 / 0.04),
+    inset 0 1px 0 rgb(var(--rgb-primary) / 0.08),
+    0 0 0 4px rgb(var(--rgb-primary) / 0.04),
     0 1px 2px rgb(0 0 0 / 0.3),
-    0 20px 56px -18px rgb(54 158 255 / 0.4);
+    0 20px 56px -18px rgb(var(--rgb-glow-1) / 0.4);
 }
 /* A file is being dragged over the composer. */
 .fx-glass[data-dragging="true"] {
-  border-color: rgb(76 179 255 / 0.7);
-  background: rgb(24 24 24 / 0.88);
+  border-color: rgb(var(--rgb-glow-1) / 0.7);
+  background: var(--glass-bg-drag);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.08),
-    0 0 0 4px rgb(76 179 255 / 0.12),
-    0 20px 56px -18px rgb(54 158 255 / 0.55);
+    inset 0 1px 0 rgb(var(--rgb-primary) / 0.08),
+    0 0 0 4px rgb(var(--rgb-glow-1) / 0.12),
+    0 20px 56px -18px rgb(var(--rgb-glow-1) / 0.55);
 }
 
 /* Cards: gradient edge and lift on hover. */
 .fx-card {
   position: relative;
-  background: rgb(255 255 255 / 0.04);
+  background: rgb(var(--rgb-primary) / 0.04);
   transition:
     background-color 0.25s var(--ease-out-quart),
     border-color 0.25s var(--ease-out-quart),
@@ -476,7 +704,12 @@ h3 {
   inset: -1px;
   border-radius: inherit;
   padding: 1px;
-  background: linear-gradient(135deg, rgb(76 179 255 / 0.8), rgb(168 85 247 / 0.6) 50%, rgb(45 212 191 / 0.7));
+  background: linear-gradient(
+    135deg,
+    rgb(var(--rgb-glow-1) / 0.8),
+    rgb(var(--rgb-glow-2) / 0.6) 50%,
+    rgb(var(--rgb-alt) / 0.7)
+  );
   -webkit-mask:
     linear-gradient(#000 0 0) content-box,
     linear-gradient(#000 0 0);
@@ -489,9 +722,9 @@ h3 {
   pointer-events: none;
 }
 .fx-card:hover {
-  background: rgb(255 255 255 / 0.07);
+  background: rgb(var(--rgb-primary) / 0.07);
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.08),
+    inset 0 1px 0 rgb(var(--rgb-primary) / 0.08),
     var(--shadow-lift);
 }
 .fx-card:hover::before,
@@ -499,7 +732,7 @@ h3 {
   opacity: 1;
 }
 
-/* Near-white primary button with a soft glow on hover. */
+/* Light primary button with a soft glow on hover. */
 .fx-primary {
   transition:
     background-color 0.2s var(--ease-out-quart),
@@ -509,8 +742,8 @@ h3 {
 }
 .fx-primary:hover:not(:disabled) {
   box-shadow:
-    0 0 0 1px rgb(255 255 255 / 0.5),
-    0 8px 26px -8px rgb(255 255 255 / 0.45);
+    0 0 0 1px rgb(var(--rgb-primary) / 0.5),
+    0 8px 26px -8px rgb(var(--rgb-primary) / 0.45);
 }
 
 /* A light sweeps along the top edge of a card while its tool is running. */
@@ -522,7 +755,13 @@ h3 {
   position: absolute;
   inset: 0 0 auto 0;
   height: 1px;
-  background: linear-gradient(90deg, transparent, rgb(76 179 255 / 0.9), rgb(45 212 191 / 0.9), transparent);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgb(var(--rgb-glow-1) / 0.9),
+    rgb(var(--rgb-alt) / 0.9),
+    transparent
+  );
   background-size: 50% 100%;
   background-repeat: no-repeat;
   animation: sweep 1.6s ease-in-out infinite;
@@ -538,10 +777,10 @@ h3 {
 
 /* User message bubble: a faint top-lit gradient instead of a flat fill. */
 .fx-bubble {
-  background: linear-gradient(180deg, rgb(255 255 255 / 0.1), rgb(255 255 255 / 0.07));
+  background: linear-gradient(180deg, rgb(var(--rgb-primary) / 0.1), rgb(var(--rgb-primary) / 0.07));
   box-shadow:
-    inset 0 1px 0 rgb(255 255 255 / 0.08),
-    inset 0 0 0 1px rgb(255 255 255 / 0.04),
+    inset 0 1px 0 rgb(var(--rgb-primary) / 0.08),
+    inset 0 0 0 1px rgb(var(--rgb-primary) / 0.04),
     0 1px 2px rgb(0 0 0 / 0.2);
 }
 

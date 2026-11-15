@@ -5,6 +5,7 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { CircleAlert, FileText, Info, Phone, RotateCcw } from "lucide-react";
 
+import { useT } from "@/lib/i18n";
 import type { ChatMessage as Message, ToolPart } from "@/lib/types";
 import { LogoMark } from "@/components/Logo";
 import ImageAttachment from "@/components/ImageAttachment";
@@ -12,8 +13,9 @@ import ToolResult from "@/components/ToolResult";
 import { Button } from "@/components/ui/button";
 
 function TypingDots() {
+  const t = useT();
   return (
-    <div className="flex h-8 items-center gap-1.5" role="status" aria-label="MedAI пише">
+    <div className="flex h-8 items-center gap-1.5" role="status" aria-label={t("typing")}>
       {[0, 1, 2].map((i) => (
         <span
           key={i}
@@ -26,22 +28,23 @@ function TypingDots() {
 }
 
 function EmergencyBanner() {
+  const t = useT();
   return (
-    <div className="flex animate-rise items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 shadow-[0_0_0_1px_rgb(239_68_68/0.12),0_12px_32px_-16px_rgb(239_68_68/0.55)]">
-      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-[0_0_18px_-2px_rgb(239_68_68/0.7)]">
+    <div className="flex animate-rise items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3 shadow-[0_0_0_1px_rgb(var(--rgb-danger)/0.12),0_12px_32px_-16px_rgb(var(--rgb-danger)/0.55)]">
+      <span className="mt-0.5 flex size-8 shrink-0 items-center justify-center rounded-full bg-red-600 text-white shadow-[0_0_18px_-2px_rgb(var(--rgb-danger)/0.7)]">
         <Phone className="size-4" />
       </span>
       <div className="text-sm leading-snug text-red-900">
-        <p className="font-display font-bold">Възможен спешен случай</p>
+        <p className="font-display font-bold">{t("emergency_title")}</p>
         <p className="mt-0.5 text-pretty">
-          Ако състоянието е тежко или се влошава, обадете се незабавно на{" "}
+          {t("emergency_1")}{" "}
           <a
             href="tel:112"
             className="focus-ring rounded-sm font-bold underline underline-offset-2 transition-colors hover:text-white"
           >
             112
           </a>
-          . Не чакайте отговор от MedAI.
+          {t("emergency_2")}
         </p>
       </div>
     </div>
@@ -77,18 +80,15 @@ function Markdown({ text }: { text: string }) {
 /** With tool activity hidden, the only output worth showing is a picture the
     reply text cannot carry: the annotated X-ray. Everything else is in the words. */
 function QuietToolOutput({ part }: { part: ToolPart }) {
+  const t = useT();
   const result = part.state === "done" ? part.result : undefined;
   if (!result?.annotated_image_id) return null;
   return (
     <div className="animate-rise pt-1">
       <ImageAttachment
         imageId={result.annotated_image_id}
-        alt={
-          result.simulated
-            ? "Демо изображение със симулирани рамки"
-            : "Рентгенова снимка с отбелязани области"
-        }
-        caption={result.simulated ? "Демо: симулирани рамки, без медицинско значение" : undefined}
+        alt={result.simulated ? t("demo_image_alt") : t("xray_annotated_alt")}
+        caption={result.simulated ? t("demo_caption") : undefined}
         sizeClassName="max-h-[26rem] max-w-full"
       />
     </div>
@@ -103,6 +103,8 @@ type Props = {
 };
 
 function ChatMessageView({ message, onRetry, showTools = false }: Props) {
+  const t = useT();
+
   if (message.role === "user") {
     const attachments = message.attachments ?? [];
     return (
@@ -123,7 +125,10 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
                       {a.filename}
                     </span>
                     <span className="block text-[12px] text-ink-500">
-                      PDF документ{a.pages ? ` · ${a.pages} стр.` : ""}
+                      {t("pdf_document")}
+                      {a.pages
+                        ? ` · ${a.pages === 1 ? t("pdf_page_one") : t("pdf_pages", { count: a.pages })}`
+                        : ""}
                     </span>
                   </span>
                 </div>
@@ -131,7 +136,7 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
                 <ImageAttachment
                   key={a.imageId}
                   imageId={a.imageId}
-                  alt={`Прикачено изображение: ${a.filename}`}
+                  alt={t("attached_image_alt", { name: a.filename })}
                   caption={a.filename}
                   sizeClassName="max-h-56 max-w-full sm:max-w-xs"
                 />
@@ -187,7 +192,7 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
         )}
 
         {message.stopped && !message.error && (
-          <p className="animate-fade text-[13px] text-ink-400">Отговорът беше спрян.</p>
+          <p className="animate-fade text-[13px] text-ink-400">{t("reply_stopped")}</p>
         )}
 
         {message.error && (
@@ -200,7 +205,7 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
             {onRetry && (
               <Button variant="destructive" size="sm" onClick={onRetry}>
                 <RotateCcw className="size-3.5" />
-                Опитай отново
+                {t("retry")}
               </Button>
             )}
           </div>

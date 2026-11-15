@@ -12,6 +12,7 @@ import {
   ScanLine,
   ServerOff,
   TriangleAlert,
+  type LucideIcon,
 } from "lucide-react";
 
 import {
@@ -23,6 +24,21 @@ import {
   streamChat,
   type ChatPayload,
 } from "@/lib/api";
+import {
+  LanguageContext,
+  setCurrentLanguage,
+  translate,
+  type MessageKey,
+  type Translate,
+} from "@/lib/i18n";
+import {
+  DEFAULT_LANGUAGE,
+  DEFAULT_THEME,
+  PREFERENCE_KEYS,
+  applyTheme,
+  loadPreference,
+  savePreference,
+} from "@/lib/preferences";
 import {
   clearHistory,
   getSessionId,
@@ -54,31 +70,16 @@ import SettingsDialog from "@/components/SettingsDialog";
 import Sidebar, { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 
-const SUGGESTIONS = [
-  { icon: Activity, text: "Какви са симптомите на пневмония?" },
-  { icon: Brain, text: "Имам главоболие от няколко дни." },
-  { icon: HeartPulse, text: "Какво означава високо кръвно налягане?" },
-  { icon: ScanLine, text: "Искам да анализирам рентгенова снимка." },
+const SUGGESTIONS: { icon: LucideIcon; key: MessageKey }[] = [
+  { icon: Activity, key: "suggestion_1" },
+  { icon: Brain, key: "suggestion_2" },
+  { icon: HeartPulse, key: "suggestion_3" },
+  { icon: ScanLine, key: "suggestion_4" },
 ];
 
-const WELCOME =
-  "Здравейте! Аз съм MedAI, вашият AI медицински асистент. Можете да ме попитате за симптоми, заболявания, да прикачите рентгенова снимка за експериментален AI анализ или медицински документ, който да ви обясня.";
-
-// Layout preferences only (no health data), so they may outlive the tab.
-const SIDEBAR_WIDTH_KEY = "medai.sidebar.width";
-const SIDEBAR_COLLAPSED_KEY = "medai.sidebar.collapsed";
-
-function savePreference(key: string, value: string) {
-  try {
-    window.localStorage.setItem(key, value);
-  } catch {
-    // Storage may be blocked; the layout still works for this visit.
-  }
-}
-
-function titleFrom(text: string, attachments: Attachment[]): string {
+function titleFrom(text: string, attachments: Attachment[], t: Translate): string {
   const clean = text.replace(/\s+/g, " ").trim();
-  if (!clean) return attachments.length ? "Прикачен файл" : "Нов разговор";
+  if (!clean) return attachments.length ? t("attached_file") : t("new_conversation");
   return clean.length > 42 ? `${clean.slice(0, 42).trimEnd()}…` : clean;
 }
 
@@ -163,7 +164,12 @@ export default function ChatInterface() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [activeId, setActiveId] = useState("");
   const [consent, setConsent] = useState(false);
-  const [settings, setSettings] = useState<Settings>({ demoMode: false, showToolActivity: false });
+  const [settings, setSettings] = useState<Settings>({
+    demoMode: false,
+    showToolActivity: false,
+    language: DEFAULT_LANGUAGE,
+    theme: DEFAULT_THEME,
+  });
   const [health, setHealth] = useState<Health | null>(null);
   const [backendDown, setBackendDown] = useState(false);
 
@@ -181,6 +187,13 @@ export default function ChatInterface() {
   const conversationsRef = useRef<Conversation[]>([]);
   conversationsRef.current = conversations;
 
+  // This component provides the language to everything below it, so it
+  // translates from its own state instead of through the context hook.
+  const t = useCallback<Translate>(
+    (key, params) => translate(settings.language, key, params),
+    [settings.language],
+  );
+
   // --- load browser state after mount (avoids hydration mismatches) --------
   useEffect(() => {
     const stored = loadConversations();
@@ -193,16 +206,27 @@ export default function ChatInterface() {
     const consented = loadConsent();
     setConsent(consented);
     setConsentOpen(!consented); // ask before anything can be sent
-    setSettings(loadSettings());
-    try {
-      const width = Number(window.localStorage.getItem(SIDEBAR_WIDTH_KEY));
-      if (width >= SIDEBAR_MIN && width <= SIDEBAR_MAX) setSidebarWidth(width);
-      setSidebarCollapsed(window.localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === "1");
-    } catch {
-      // Keep the defaults.
-    }
+    const loadedSettings = loadSettings();
+    setSettings(loadedSettings);
+    setCurrentLanguage(loadedSettings.language); // before the first API call
+    const width = Number(loadPreference(PREFERENCE_KEYS.sidebarWidth));
+    if (width >= SIDEBAR_MIN && width <= SIDEBAR_MAX) setSidebarWidth(width);
+    setSidebarCollapsed(loadPreference(PREFERENCE_KEYS.sidebarCollapsed) === "1");
     setReady(true);
   }, []);
+
+  // --- language and theme on the document -----------------------------------
+  // Until the stored settings are loaded, the values the boot script in
+  // layout.tsx applied before the first paint stay in place.
+  useEffect(() => {
+    if (!ready) return;
+    setCurrentLanguage(settings.language);
+    document.documentElement.lang = settings.language;
+  }, [ready, settings.language]);
+
+  useEffect(() => {
+    if (ready) applyTheme(settings.theme);
+  }, [ready, settings.theme]);
 
   // --- persist ------------------------------------------------------------
   useEffect(() => {
@@ -308,7 +332,7 @@ export default function ChatInterface() {
           ...list,
           {
             id: conversationId,
-            title: titleFrom(text, attachments),
+            title: titleFrom(text, attachments, t),
             createdAt: now,
             updatedAt: now,
             messages: [userMessage, assistantMessage],
@@ -349,7 +373,7 @@ export default function ChatInterface() {
             ? undefined
             : err instanceof ApiError
               ? err.message
-              : "Възникна неочаквана грешка.",
+              : t("unexpected_error"),
         }));
         if (err instanceof ApiError && err.code === "unreachable") setBackendDown(true);
         if (err instanceof ApiError && err.code === "claude_not_configured") refreshHealth();
@@ -358,7 +382,7 @@ export default function ChatInterface() {
         setStreamingId(null);
       }
     },
-    [demoActive, patchMessage, refreshHealth, sessionId],
+    [demoActive, patchMessage, refreshHealth, sessionId, t],
   );
 
   const send = useCallback(
@@ -425,7 +449,7 @@ export default function ChatInterface() {
 
   const toggleSidebar = useCallback(() => {
     setSidebarCollapsed((current) => {
-      savePreference(SIDEBAR_COLLAPSED_KEY, current ? "0" : "1");
+      savePreference(PREFERENCE_KEYS.sidebarCollapsed, current ? "0" : "1");
       return !current;
     });
   }, []);
@@ -441,259 +465,264 @@ export default function ChatInterface() {
   const showScrollButton = !atBottom && messages.length > 0;
 
   return (
-    <SessionContext.Provider value={sessionId}>
-      <div className="flex h-dvh overflow-hidden bg-base">
-        <Sidebar
-          conversations={conversations}
-          activeId={activeId}
-          open={sidebarOpen}
-          collapsed={sidebarCollapsed}
-          width={sidebarWidth}
-          onResize={setSidebarWidth}
-          onResizeEnd={(width) => savePreference(SIDEBAR_WIDTH_KEY, String(width))}
-          onClose={() => setSidebarOpen(false)}
-          onNew={newConversation}
-          onSelect={(id) => {
-            setActiveId(id);
-            setSidebarOpen(false);
-          }}
-          onDelete={removeConversation}
-          onOpenSettings={() => {
-            setSettingsOpen(true);
-            setSidebarOpen(false);
+    <LanguageContext.Provider value={settings.language}>
+      {/* Hoisted into <head> by React; the tab title follows the language. */}
+      <title>{t("app_title")}</title>
+      <SessionContext.Provider value={sessionId}>
+        <div className="flex h-dvh overflow-hidden bg-base">
+          <Sidebar
+            conversations={conversations}
+            activeId={activeId}
+            open={sidebarOpen}
+            collapsed={sidebarCollapsed}
+            width={sidebarWidth}
+            onResize={setSidebarWidth}
+            onResizeEnd={(width) => savePreference(PREFERENCE_KEYS.sidebarWidth, String(width))}
+            onClose={() => setSidebarOpen(false)}
+            onNew={newConversation}
+            onSelect={(id) => {
+              setActiveId(id);
+              setSidebarOpen(false);
+            }}
+            onDelete={removeConversation}
+            onOpenSettings={() => {
+              setSettingsOpen(true);
+              setSidebarOpen(false);
+            }}
+          />
+
+          <main className="fx-aurora @container relative flex min-w-0 flex-1 flex-col">
+            {/* Top bar */}
+            <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-line bg-base/60 px-3 backdrop-blur-xl @2xl:px-4">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setSidebarOpen(true)}
+                className="lg:hidden"
+                aria-label={t("menu_open")}
+              >
+                <Menu className="size-5" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={toggleSidebar}
+                className="hidden lg:inline-flex"
+                aria-label={sidebarCollapsed ? t("sidebar_show") : t("sidebar_hide")}
+                aria-pressed={!sidebarCollapsed}
+                title={sidebarCollapsed ? t("sidebar_show_short") : t("sidebar_hide_short")}
+              >
+                <PanelLeft className="size-[18px]" />
+              </Button>
+              <h1
+                key={activeId}
+                className="min-w-0 flex-1 animate-fade truncate px-1.5 font-display text-[15px] font-bold tracking-tight text-ink-900"
+              >
+                {active?.title ?? t("new_conversation")}
+              </h1>
+              {demoActive && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsOpen(true)}
+                  className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-[background-color,border-color,scale] duration-200 ease-out-quart hover:border-amber-200/80 hover:bg-amber-100 active:scale-[0.97]"
+                >
+                  <FlaskConical className="size-3.5" />
+                  {t("demo_mode")}
+                </button>
+              )}
+            </header>
+
+            {/* System warnings */}
+            {(backendDown || (health && !health.claude_configured)) && (
+              <div
+                className="flex animate-fade items-start gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] leading-snug text-amber-900 @2xl:px-6"
+                role="alert"
+              >
+                {backendDown ? (
+                  <>
+                    <ServerOff className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      {t("backend_down_1")}
+                      <code className="font-mono text-[12px]">uvicorn main:app --port 8000</code>
+                      {t("backend_down_2")}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <TriangleAlert className="mt-0.5 size-4 shrink-0" />
+                    <span>
+                      {t("claude_unconfigured_1")}{" "}
+                      <code className="font-mono text-[12px]">ANTHROPIC_API_KEY</code>{" "}
+                      {t("claude_unconfigured_2")} <code className="font-mono text-[12px]">.env</code>{" "}
+                      {t("claude_unconfigured_3")}
+                    </span>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Messages */}
+            <div
+              ref={scrollRef}
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+              }}
+              className="scroll-quiet min-h-0 flex-1 overflow-y-auto"
+            >
+              {!ready ? null : messages.length === 0 ? (
+                <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col items-center justify-center px-5 py-12 text-center">
+                  <LogoMark className="fx-halo size-16 animate-rise rounded-2xl" />
+                  <h2 className="fx-title mt-7 animate-rise font-display text-[1.7rem] font-extrabold leading-tight tracking-tight text-ink-900 @xl:text-[2rem]">
+                    {t("welcome_heading")}
+                  </h2>
+                  <p
+                    className="mt-3 max-w-xl animate-rise text-pretty text-[15px] leading-relaxed text-ink-500"
+                    style={{ animationDelay: "60ms" }}
+                  >
+                    {t("welcome_text")}
+                  </p>
+
+                  <div className="mt-9 grid w-full gap-3 @xl:grid-cols-2">
+                    {SUGGESTIONS.map(({ icon: Icon, key }, i) => {
+                      const text = t(key);
+                      return (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => send(text, [])}
+                          disabled={busy || backendDown}
+                          style={{ animationDelay: `${120 + i * 50}ms` }}
+                          className="fx-card focus-ring group flex animate-rise items-center gap-3.5 rounded-2xl border border-line bg-card p-3.5 text-left text-sm text-ink-700 hover:-translate-y-0.5 hover:border-line-strong hover:text-ink-900 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
+                        >
+                          <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill text-brand-300 ring-1 ring-line transition-[background-color,color,scale,box-shadow] duration-300 ease-out-quart group-hover:scale-105 group-hover:bg-primary group-hover:text-black group-hover:shadow-[0_6px_18px_-6px_rgb(var(--rgb-primary)/0.5)]">
+                            <Icon className="size-[18px]" />
+                          </span>
+                          <span className="leading-snug">{text}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {health && yoloStatus !== "ready" && (
+                    <p className="mt-7 flex max-w-xl animate-fade items-start gap-2.5 rounded-xl border border-line bg-fill px-4 py-3 text-left text-[13px] leading-relaxed text-ink-500">
+                      <ScanLine className="mt-0.5 size-4 shrink-0 text-ink-400" />
+                      <span>
+                        {yoloStatus === "incompatible"
+                          ? t("xray_unavailable_incompatible")
+                          : t("xray_unavailable_missing")}{" "}
+                        {demoActive ? (
+                          <strong className="font-semibold text-amber-700">{t("demo_active_note")}</strong>
+                        ) : (
+                          health.yolo.demo_mode_allowed && (
+                            <>
+                              {t("demo_hint_1")}{" "}
+                              <button
+                                type="button"
+                                onClick={() => setSettingsOpen(true)}
+                                className="focus-ring rounded-sm font-semibold text-brand-300 underline-offset-2 transition-colors hover:text-brand-400 hover:underline"
+                              >
+                                {t("settings")}
+                              </button>
+                              {t("demo_hint_2")}
+                            </>
+                          )
+                        )}
+                      </span>
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div
+                  key={activeId}
+                  className="mx-auto w-full max-w-3xl animate-fade space-y-8 px-4 pb-10 pt-8 @2xl:px-8"
+                >
+                  {messages.map((m) => (
+                    <ChatMessage
+                      key={m.id}
+                      message={m}
+                      showTools={settings.showToolActivity}
+                      onRetry={m === lastMessage && m.error && !busy ? retry : undefined}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Composer */}
+            <div className="relative shrink-0 px-3 pb-3 @2xl:px-6 @2xl:pb-4">
+              {messages.length > 0 && (
+                <div className="fx-fade-up pointer-events-none absolute inset-x-0 -top-10 h-10" aria-hidden />
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setAtBottom(true);
+                  scrollToBottom(true);
+                }}
+                className={cn(
+                  "focus-ring absolute -top-12 left-1/2 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-card/90 text-ink-700 shadow-lift backdrop-blur-md transition-[opacity,translate,scale,background-color,color] duration-300 ease-out-quart hover:bg-fill-hover hover:text-ink-900 active:scale-95",
+                  showScrollButton
+                    ? "opacity-100"
+                    : "pointer-events-none translate-y-2 scale-90 opacity-0",
+                )}
+                aria-label={t("scroll_to_latest")}
+                tabIndex={showScrollButton ? 0 : -1}
+              >
+                <ArrowDown className="size-4" />
+              </button>
+
+              <div className="mx-auto w-full max-w-3xl">
+                {ready && (
+                  <ChatInput
+                    conversationId={activeId}
+                    sessionId={sessionId}
+                    busy={busy}
+                    disabled={backendDown}
+                    onSend={send}
+                    onStop={stop}
+                  />
+                )}
+                <p className="mt-2.5 px-2 text-center text-[11.5px] leading-snug text-ink-400">
+                  {t("footer_disclaimer")} {t("footer_emergency_1")}{" "}
+                  <a
+                    href="tel:112"
+                    className="focus-ring rounded-sm font-semibold text-ink-500 underline-offset-2 transition-colors hover:text-ink-900 hover:underline"
+                  >
+                    112
+                  </a>
+                  {t("footer_emergency_2")}
+                </p>
+              </div>
+            </div>
+          </main>
+        </div>
+
+        <ConsentDialog
+          open={consentOpen}
+          onAccept={acceptConsent}
+          onDecline={() => {
+            pendingSendRef.current = null;
+            setConsentOpen(false);
           }}
         />
 
-        <main className="fx-aurora @container relative flex min-w-0 flex-1 flex-col">
-          {/* Top bar */}
-          <header className="flex h-14 shrink-0 items-center gap-1.5 border-b border-line bg-base/60 px-3 backdrop-blur-xl @2xl:px-4">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setSidebarOpen(true)}
-              className="lg:hidden"
-              aria-label="Отвори менюто"
-            >
-              <Menu className="size-5" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleSidebar}
-              className="hidden lg:inline-flex"
-              aria-label={sidebarCollapsed ? "Покажи страничното меню" : "Скрий страничното меню"}
-              aria-pressed={!sidebarCollapsed}
-              title={sidebarCollapsed ? "Покажи менюто" : "Скрий менюто"}
-            >
-              <PanelLeft className="size-[18px]" />
-            </Button>
-            <h1
-              key={activeId}
-              className="min-w-0 flex-1 animate-fade truncate px-1.5 font-display text-[15px] font-bold tracking-tight text-ink-900"
-            >
-              {active?.title ?? "Нов разговор"}
-            </h1>
-            {demoActive && (
-              <button
-                type="button"
-                onClick={() => setSettingsOpen(true)}
-                className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-[background-color,border-color,scale] duration-200 ease-out-quart hover:border-amber-200/80 hover:bg-amber-100 active:scale-[0.97]"
-              >
-                <FlaskConical className="size-3.5" />
-                Демо режим
-              </button>
-            )}
-          </header>
-
-          {/* System warnings */}
-          {(backendDown || (health && !health.claude_configured)) && (
-            <div
-              className="flex animate-fade items-start gap-2.5 border-b border-amber-200 bg-amber-50 px-4 py-2.5 text-[13px] leading-snug text-amber-900 @2xl:px-6"
-              role="alert"
-            >
-              {backendDown ? (
-                <>
-                  <ServerOff className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    Няма връзка със сървъра на MedAI. Стартирайте бекенда (
-                    <code className="font-mono text-[12px]">uvicorn main:app --port 8000</code>) и
-                    опитайте отново.
-                  </span>
-                </>
-              ) : (
-                <>
-                  <TriangleAlert className="mt-0.5 size-4 shrink-0" />
-                  <span>
-                    Claude API не е конфигуриран. Задайте{" "}
-                    <code className="font-mono text-[12px]">ANTHROPIC_API_KEY</code> във файла{" "}
-                    <code className="font-mono text-[12px]">.env</code> и рестартирайте сървъра.
-                  </span>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Messages */}
-          <div
-            ref={scrollRef}
-            onScroll={(e) => {
-              const el = e.currentTarget;
-              setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
-            }}
-            className="scroll-quiet min-h-0 flex-1 overflow-y-auto"
-          >
-            {!ready ? null : messages.length === 0 ? (
-              <div className="mx-auto flex min-h-full w-full max-w-2xl flex-col items-center justify-center px-5 py-12 text-center">
-                <LogoMark className="fx-halo size-16 animate-rise rounded-2xl" />
-                <h2 className="fx-title mt-7 animate-rise font-display text-[1.7rem] font-extrabold leading-tight tracking-tight text-ink-900 @xl:text-[2rem]">
-                  С какво мога да помогна?
-                </h2>
-                <p
-                  className="mt-3 max-w-xl animate-rise text-pretty text-[15px] leading-relaxed text-ink-500"
-                  style={{ animationDelay: "60ms" }}
-                >
-                  {WELCOME}
-                </p>
-
-                <div className="mt-9 grid w-full gap-3 @xl:grid-cols-2">
-                  {SUGGESTIONS.map(({ icon: Icon, text }, i) => (
-                    <button
-                      key={text}
-                      type="button"
-                      onClick={() => send(text, [])}
-                      disabled={busy || backendDown}
-                      style={{ animationDelay: `${120 + i * 50}ms` }}
-                      className="fx-card focus-ring group flex animate-rise items-center gap-3.5 rounded-2xl border border-line bg-card p-3.5 text-left text-sm text-ink-700 hover:-translate-y-0.5 hover:border-line-strong hover:text-ink-900 active:translate-y-0 disabled:pointer-events-none disabled:opacity-50"
-                    >
-                      <span className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-fill text-brand-300 ring-1 ring-line transition-[background-color,color,scale,box-shadow] duration-300 ease-out-quart group-hover:scale-105 group-hover:bg-primary group-hover:text-black group-hover:shadow-[0_6px_18px_-6px_rgb(255_255_255/0.5)]">
-                        <Icon className="size-[18px]" />
-                      </span>
-                      <span className="leading-snug">{text}</span>
-                    </button>
-                  ))}
-                </div>
-
-                {health && yoloStatus !== "ready" && (
-                  <p className="mt-7 flex max-w-xl animate-fade items-start gap-2.5 rounded-xl border border-line bg-fill px-4 py-3 text-left text-[13px] leading-relaxed text-ink-500">
-                    <ScanLine className="mt-0.5 size-4 shrink-0 text-ink-400" />
-                    <span>
-                      {yoloStatus === "incompatible"
-                        ? "Конфигурираният модел не е медицински, затова X-ray Analyzer е недостъпен."
-                        : "Моделът на X-ray Analyzer не е конфигуриран на сървъра, затова реалният анализ на рентгенови снимки е недостъпен."}{" "}
-                      {demoActive ? (
-                        <strong className="font-semibold text-amber-700">
-                          Включен е демо режим: резултатите са симулирани.
-                        </strong>
-                      ) : (
-                        health.yolo.demo_mode_allowed && (
-                          <>
-                            За тест на интерфейса можете да включите демо режим от{" "}
-                            <button
-                              type="button"
-                              onClick={() => setSettingsOpen(true)}
-                              className="focus-ring rounded-sm font-semibold text-brand-300 underline-offset-2 transition-colors hover:text-brand-400 hover:underline"
-                            >
-                              Настройки
-                            </button>
-                            .
-                          </>
-                        )
-                      )}
-                    </span>
-                  </p>
-                )}
-              </div>
-            ) : (
-              <div
-                key={activeId}
-                className="mx-auto w-full max-w-3xl animate-fade space-y-8 px-4 pb-10 pt-8 @2xl:px-8"
-              >
-                {messages.map((m) => (
-                  <ChatMessage
-                    key={m.id}
-                    message={m}
-                    showTools={settings.showToolActivity}
-                    onRetry={m === lastMessage && m.error && !busy ? retry : undefined}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Composer */}
-          <div className="relative shrink-0 px-3 pb-3 @2xl:px-6 @2xl:pb-4">
-            {messages.length > 0 && (
-              <div className="fx-fade-up pointer-events-none absolute inset-x-0 -top-10 h-10" aria-hidden />
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setAtBottom(true);
-                scrollToBottom(true);
-              }}
-              className={cn(
-                "focus-ring absolute -top-12 left-1/2 flex size-9 -translate-x-1/2 items-center justify-center rounded-full border border-line bg-card/90 text-ink-700 shadow-lift backdrop-blur-md transition-[opacity,translate,scale,background-color,color] duration-300 ease-out-quart hover:bg-fill-hover hover:text-ink-900 active:scale-95",
-                showScrollButton
-                  ? "opacity-100"
-                  : "pointer-events-none translate-y-2 scale-90 opacity-0",
-              )}
-              aria-label="Към последното съобщение"
-              tabIndex={showScrollButton ? 0 : -1}
-            >
-              <ArrowDown className="size-4" />
-            </button>
-
-            <div className="mx-auto w-full max-w-3xl">
-              {ready && (
-                <ChatInput
-                  conversationId={activeId}
-                  sessionId={sessionId}
-                  busy={busy}
-                  disabled={backendDown}
-                  onSend={send}
-                  onStop={stop}
-                />
-              )}
-              <p className="mt-2.5 px-2 text-center text-[11.5px] leading-snug text-ink-400">
-                MedAI дава обща информация и не поставя диагноза. Не замества консултация с лекар.
-                При спешен случай се обадете на{" "}
-                <a
-                  href="tel:112"
-                  className="focus-ring rounded-sm font-semibold text-ink-500 underline-offset-2 transition-colors hover:text-ink-900 hover:underline"
-                >
-                  112
-                </a>
-                .
-              </p>
-            </div>
-          </div>
-        </main>
-      </div>
-
-      <ConsentDialog
-        open={consentOpen}
-        onAccept={acceptConsent}
-        onDecline={() => {
-          pendingSendRef.current = null;
-          setConsentOpen(false);
-        }}
-      />
-
-      <SettingsDialog
-        open={settingsOpen}
-        onOpenChange={setSettingsOpen}
-        settings={settings}
-        onSettingsChange={updateSettings}
-        health={health}
-        backendDown={backendDown}
-        consent={consent}
-        onRevokeConsent={() => {
-          saveConsent(false);
-          setConsent(false);
-        }}
-        onClearHistory={clearAll}
-        conversationCount={conversations.length}
-      />
-    </SessionContext.Provider>
+        <SettingsDialog
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+          settings={settings}
+          onSettingsChange={updateSettings}
+          health={health}
+          backendDown={backendDown}
+          consent={consent}
+          onRevokeConsent={() => {
+            saveConsent(false);
+            setConsent(false);
+          }}
+          onClearHistory={clearAll}
+          conversationCount={conversations.length}
+        />
+      </SessionContext.Provider>
+    </LanguageContext.Provider>
   );
 }

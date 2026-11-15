@@ -5,7 +5,8 @@ export function LogoMark({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "inline-flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-teal-500 text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.28),0_1px_2px_rgb(0_0_0/0.3),0_4px_12px_-4px_rgb(54_158_255/0.5)]",
+        // Brand colour into the theme's second accent, with a glow in the brand colour.
+        "inline-flex size-9 items-center justify-center rounded-xl bg-gradient-to-br from-brand-600 to-brand-alt text-white shadow-[inset_0_1px_0_rgb(255_255_255/0.28),0_1px_2px_rgb(0_0_0/0.3),0_4px_12px_-4px_rgb(var(--rgb-glow-1)/0.5)]",
         className,
       )}
       aria-hidden

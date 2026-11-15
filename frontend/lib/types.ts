@@ -132,10 +132,18 @@ export type Conversation = {
   messages: ChatMessage[];
 };
 
+/** Interface language. Also sent to the API, which answers (and has Claude reply) in it. */
+export type Language = "bg" | "en";
+
+/** Colour theme; all three are dark. Defined in app/globals.css, listed in lib/preferences.ts. */
+export type ThemeName = "graphite" | "ember" | "dusk";
+
 export type Settings = {
   demoMode: boolean;
   /** Show tool cards (status, raw results) in the chat; off = only the reply */
   showToolActivity: boolean;
+  language: Language;
+  theme: ThemeName;
 };
 
 export type Health = {

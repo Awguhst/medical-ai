@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useRef, useState } from "react";
 import { ImageOff, Maximize2 } from "lucide-react";
 
 import { loadImageUrl } from "@/lib/api";
+import { useT } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/components/ui/dialog";
 
@@ -27,6 +28,7 @@ export default function ImageAttachment({
   className,
   sizeClassName = "max-h-64 max-w-full",
 }: Props) {
+  const t = useT();
   const sessionId = useContext(SessionContext);
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -62,7 +64,7 @@ export default function ImageAttachment({
         )}
       >
         <ImageOff className="size-4 shrink-0" />
-        <span>Изображението вече не е налично (временните файлове се изтриват автоматично).</span>
+        <span>{t("image_unavailable")}</span>
       </div>
     );
   }
@@ -71,7 +73,7 @@ export default function ImageAttachment({
     return (
       <div
         className={cn("skeleton h-40 w-56 max-w-full rounded-xl ring-1 ring-line", className)}
-        aria-label="Зареждане на изображението"
+        aria-label={t("image_loading")}
       />
     );
   }
@@ -85,7 +87,7 @@ export default function ImageAttachment({
           "focus-ring group relative block overflow-hidden rounded-xl bg-black ring-1 ring-line transition-[box-shadow,translate] duration-300 ease-out-quart hover:-translate-y-0.5 hover:shadow-lift hover:ring-white/25",
           className,
         )}
-        aria-label={`Увеличи: ${alt}`}
+        aria-label={t("image_enlarge", { alt })}
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
@@ -112,7 +114,7 @@ export default function ImageAttachment({
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="bg-black p-0 sm:max-w-4xl">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
-          <DialogDescription className="sr-only">Увеличен изглед на изображението</DialogDescription>
+          <DialogDescription className="sr-only">{t("image_enlarged")}</DialogDescription>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={url} alt={alt} className="max-h-[85dvh] w-full object-contain" />
         </DialogContent>

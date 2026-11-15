@@ -3,6 +3,7 @@
 import { useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 import { MessageSquare, MessagesSquare, Plus, Settings as SettingsIcon, Trash2, X } from "lucide-react";
 
+import { useT } from "@/lib/i18n";
 import type { Conversation } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { Logo } from "@/components/Logo";
@@ -50,6 +51,7 @@ export default function Sidebar({
   onDelete,
   onOpenSettings,
 }: Props) {
+  const t = useT();
   const [dragging, setDragging] = useState(false);
   const sorted = [...conversations].sort((a, b) => b.updatedAt - a.updatedAt);
 
@@ -107,7 +109,7 @@ export default function Sidebar({
           open ? "translate-x-0 shadow-float" : "-translate-x-full",
           collapsed ? "lg:invisible lg:w-0 lg:border-r-0" : DESKTOP_WIDTH,
         )}
-        aria-label="Странично меню"
+        aria-label={t("sidebar_label")}
       >
         {/* Fixed-width inner column so content does not reflow while collapsing */}
         <div className={cn("flex h-full shrink-0 flex-col", DRAWER_WIDTH, DESKTOP_WIDTH)}>
@@ -118,7 +120,7 @@ export default function Sidebar({
               size="icon"
               onClick={onClose}
               className="-mr-1.5 lg:hidden"
-              aria-label="Затвори менюто"
+              aria-label={t("menu_close")}
             >
               <X className="size-5" />
             </Button>
@@ -130,15 +132,15 @@ export default function Sidebar({
               onClick={onNew}
               className="fx-card focus-ring group flex h-11 w-full items-center gap-3 rounded-xl border border-line px-2.5 text-left text-sm font-medium text-ink-900 hover:border-line-strong active:scale-[0.98]"
             >
-              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-fill-hover text-brand-300 ring-1 ring-line transition-[rotate,background-color,color,box-shadow] duration-300 ease-out-quart group-hover:rotate-90 group-hover:bg-primary group-hover:text-black group-hover:shadow-[0_4px_12px_-4px_rgb(255_255_255/0.5)]">
+              <span className="flex size-7 shrink-0 items-center justify-center rounded-lg bg-fill-hover text-brand-300 ring-1 ring-line transition-[rotate,background-color,color,box-shadow] duration-300 ease-out-quart group-hover:rotate-90 group-hover:bg-primary group-hover:text-black group-hover:shadow-[0_4px_12px_-4px_rgb(var(--rgb-primary)/0.5)]">
                 <Plus className="size-4" strokeWidth={2.4} />
               </span>
-              Нов разговор
+              {t("new_conversation")}
             </button>
           </div>
 
           <div className="flex items-center justify-between px-5 pb-2 pt-5">
-            <span className="eyebrow">История на разговорите</span>
+            <span className="eyebrow">{t("history_heading")}</span>
             {sorted.length > 0 && (
               <span className="rounded-md bg-fill-hover px-1.5 py-0.5 text-[10.5px] font-semibold tabular-nums text-ink-500">
                 {sorted.length}
@@ -153,7 +155,7 @@ export default function Sidebar({
                   <MessagesSquare className="size-[18px]" />
                 </span>
                 <p className="text-pretty text-[12.5px] leading-relaxed text-ink-400">
-                  Все още няма разговори. Историята се пази само в този раздел на браузъра.
+                  {t("history_empty")}
                 </p>
               </div>
             ) : (
@@ -168,9 +170,9 @@ export default function Sidebar({
                         aria-current={active ? "page" : undefined}
                         className={cn(
                           "focus-ring relative flex h-10 w-full items-center gap-2.5 rounded-lg pl-3 pr-9 text-left text-[13.5px] transition-[background-color,color,box-shadow] duration-200 ease-out-quart",
-                          "before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-brand-300 before:to-teal-400 before:transition-[opacity,scale] before:duration-300 before:ease-out-quart",
+                          "before:absolute before:inset-y-2 before:left-0 before:w-[3px] before:rounded-full before:bg-gradient-to-b before:from-brand-300 before:to-brand-alt before:transition-[opacity,scale] before:duration-300 before:ease-out-quart",
                           active
-                            ? "bg-fill-hover font-medium text-ink-900 shadow-[inset_0_1px_0_rgb(255_255_255/0.06)] ring-1 ring-line before:opacity-100"
+                            ? "bg-fill-hover font-medium text-ink-900 shadow-[inset_0_1px_0_rgb(var(--rgb-primary)/0.06)] ring-1 ring-line before:opacity-100"
                             : "text-ink-700 before:scale-y-0 before:opacity-0 hover:bg-fill hover:text-ink-900",
                         )}
                       >
@@ -186,8 +188,8 @@ export default function Sidebar({
                         type="button"
                         onClick={() => onDelete(c.id)}
                         className="focus-ring absolute right-1 top-1/2 -translate-y-1/2 rounded-lg p-1.5 text-ink-400 opacity-0 transition-[opacity,background-color,color,scale] duration-200 ease-out-quart hover:bg-red-100 hover:text-red-700 focus-visible:opacity-100 active:scale-90 group-hover:opacity-100 max-lg:opacity-100"
-                        aria-label={`Изтрий разговора „${c.title}“`}
-                        title="Изтрий разговора"
+                        aria-label={t("delete_conversation_named", { title: c.title })}
+                        title={t("delete_conversation")}
                       >
                         <Trash2 className="size-3.5" />
                       </button>
@@ -205,7 +207,7 @@ export default function Sidebar({
               className="focus-ring group flex h-10 w-full items-center gap-2.5 rounded-lg px-3 text-[13.5px] text-ink-700 transition-[background-color,color] duration-200 ease-out-quart hover:bg-fill-hover hover:text-ink-900 active:scale-[0.98]"
             >
               <SettingsIcon className="size-4 text-ink-500 transition-[rotate,color] duration-500 ease-out-quart group-hover:rotate-90 group-hover:text-ink-700" />
-              Настройки
+              {t("settings")}
             </button>
           </div>
         </div>
@@ -218,11 +220,11 @@ export default function Sidebar({
             role="separator"
             tabIndex={0}
             aria-orientation="vertical"
-            aria-label="Преоразмери страничното меню"
+            aria-label={t("resize_sidebar")}
             aria-valuenow={width}
             aria-valuemin={SIDEBAR_MIN}
             aria-valuemax={SIDEBAR_MAX}
-            title="Плъзнете за преоразмеряване, двоен клик за връщане"
+            title={t("resize_hint")}
             onPointerDown={startDrag}
             onPointerMove={drag}
             onPointerUp={endDrag}

@@ -21,6 +21,7 @@ from fastapi.staticfiles import StaticFiles
 from dotenv import dotenv_values
 
 from config import BACKEND_DIR, PROJECT_ROOT, get_settings
+from i18n import parse_language, tr
 from models.schemas import HealthResponse, ImageTriageHealth, YoloHealth
 from routers import chat, uploads
 from services.image_service import get_image_store
@@ -100,7 +101,7 @@ app.add_middleware(
     allow_origins=list(get_settings().frontend_origins),
     allow_credentials=False,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "X-Session-Id"],
+    allow_headers=["Content-Type", "X-Session-Id", "Accept-Language"],
 )
 
 app.include_router(chat.router)
@@ -116,7 +117,7 @@ async def http_error(_: Request, exc: HTTPException) -> JSONResponse:
 
 
 @app.exception_handler(RequestValidationError)
-async def validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
+async def validation_error(request: Request, exc: RequestValidationError) -> JSONResponse:
     # Field locations only — never echo submitted values back or into logs.
     fields = sorted({".".join(str(p) for p in err.get("loc", ())[1:]) for err in exc.errors()})
     return JSONResponse(
@@ -124,7 +125,7 @@ async def validation_error(_: Request, exc: RequestValidationError) -> JSONRespo
         content={
             "error": {
                 "code": "invalid_request",
-                "message": "Невалидна заявка.",
+                "message": tr(parse_language(request.headers.get("accept-language")), "invalid_request"),
                 "fields": fields,
             }
         },
