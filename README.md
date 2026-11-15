@@ -230,6 +230,20 @@ docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 -t medai-fron
 docker run --rm -p 3000:3000 medai-frontend
 ```
 
+Or both at once, with [docker-compose.yml](docker-compose.yml) reading the
+same `.env` the backend uses outside Docker:
+
+```bash
+docker compose up --build -d      # backend on :8000, frontend on :3000
+docker compose down
+```
+
+For a server other than your own machine, set `NEXT_PUBLIC_API_URL` in `.env`
+to the backend URL the browser will reach, and put the frontend's URL in
+`FRONTEND_ORIGINS`. If ports 8000 or 3000 are taken, `BACKEND_PORT` and
+`FRONTEND_PORT` move the host ports (adjust those two URLs to match). Railway
+does not use this file; it builds the two Dockerfiles itself.
+
 What the backend build does, and why:
 
 * installs the CPU build of PyTorch first, so the multi-gigabyte CUDA wheels
@@ -358,6 +372,7 @@ id the browser keeps in `sessionStorage`).
 ├── models/                         YOLO weights go here (README.md inside); triage/ is the CLIP cache
 ├── .railway/railway.ts             Railway infrastructure as code (two services)
 ├── Dockerfile                      Backend image (context: repository root, models baked in)
+├── docker-compose.yml              Both services on one machine (not used by Railway)
 ├── package.json                    Root tooling only: the `railway` SDK for .railway/railway.ts
 └── .env.example
 ```
