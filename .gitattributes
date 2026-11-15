@@ -1,0 +1,10 @@
+# Every checkout gets LF line endings: the Dockerfiles, shell snippets and
+# Python sources are written with LF and are built on Linux.
+* text=auto eol=lf
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.ico binary
+*.pdf binary
+*.pt binary
+*.onnx binary

@@ -1,0 +1,22 @@
+# Build context for the backend image (Dockerfile at the repository root).
+# Only backend/ and models/README.md are needed; everything else stays out so
+# secrets never reach the image and the context stays small.
+.git
+.gitignore
+.railway
+.env
+**/.env
+**/.env.*
+frontend
+backend/.venv
+**/__pycache__
+**/*.pyc
+# Weights are downloaded and checksum-verified during the build, never copied
+# from a working tree. The triage cache is rebuilt inside the image.
+models/*.pt
+models/*.onnx
+models/triage
+# Root tooling for the Railway IaC file, not part of the backend image.
+package.json
+package-lock.json
+node_modules

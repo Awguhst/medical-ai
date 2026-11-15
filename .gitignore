@@ -1,0 +1,25 @@
+# Secrets
+.env
+backend/.env
+frontend/.env*.local
+
+# Python
+backend/.venv/
+__pycache__/
+*.pyc
+
+# Node / Next.js
+frontend/node_modules/
+frontend/.next/
+frontend/next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
+# Model weights are never committed
+models/*.pt
+models/*.onnx
+
+# Hugging Face cache of the image triage model (downloaded automatically)
+models/triage/
+
+# Root tooling for the Railway IaC file (.railway/railway.ts)
+/node_modules/

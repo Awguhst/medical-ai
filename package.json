@@ -1,0 +1,13 @@
+{
+  "name": "medical-ai",
+  "private": true,
+  "type": "module",
+  "description": "Deployment tooling for MedAI Bulgaria: the Railway infrastructure-as-code file in .railway/ imports the `railway` SDK. The application itself lives in backend/ and frontend/.",
+  "scripts": {
+    "railway:plan": "railway config plan",
+    "railway:apply": "railway config apply"
+  },
+  "devDependencies": {
+    "railway": "^3.17.0"
+  }
+}
