@@ -4,8 +4,11 @@
 # Build context is the frontend/ directory. On Railway, set the frontend
 # service's root directory to /frontend so this Dockerfile is detected.
 #
-#   docker build --build-arg NEXT_PUBLIC_API_URL=https://api.example.com -t medai-frontend frontend
-#   docker run --rm -p 3000:3000 medai-frontend
+# The backend address is a RUNTIME setting: set API_URL on the container and
+# the server injects it into every page. The image itself is backend-agnostic.
+#
+#   docker build -t medai-frontend frontend
+#   docker run --rm -p 3000:3000 -e API_URL=https://api.example.com medai-frontend
 
 FROM node:22-alpine AS deps
 RUN apk add --no-cache libc6-compat
@@ -17,12 +20,9 @@ FROM node:22-alpine AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
-# NEXT_PUBLIC_* values are inlined into the browser bundle at build time, so the
-# backend's public URL must be known here. Railway passes a service variable of
-# the same name into the build when it is declared with ARG.
-ARG NEXT_PUBLIC_API_URL
-RUN test -n "$NEXT_PUBLIC_API_URL" \
-    || { echo "NEXT_PUBLIC_API_URL must be set at build time (the backend's public URL)."; exit 1; }
+# Optional: bake a default backend URL into the browser bundle. Normally left
+# empty; the runtime API_URL variable takes precedence anyway.
+ARG NEXT_PUBLIC_API_URL=""
 ENV NEXT_PUBLIC_API_URL=$NEXT_PUBLIC_API_URL \
     NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
@@ -38,5 +38,6 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 USER nextjs
 EXPOSE 3000
-# Railway injects PORT; the standalone server reads PORT and HOSTNAME.
+# Railway injects PORT; the standalone server reads PORT and HOSTNAME. Set
+# API_URL to the backend's public URL (the browser calls it directly).
 CMD ["node", "server.js"]

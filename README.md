@@ -78,9 +78,10 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-If the backend runs elsewhere, set `NEXT_PUBLIC_API_URL` for the frontend
-(e.g. in `frontend/.env.local`) and add the frontend's origin to
-`FRONTEND_ORIGINS` in `.env`.
+If the backend runs elsewhere, tell the frontend where: `API_URL` in the
+environment of the Next.js server (read at request time and handed to the
+browser) or `NEXT_PUBLIC_API_URL` in `frontend/.env.local` (baked in at build
+time). Then add the frontend's origin to `FRONTEND_ORIGINS` in `.env`.
 
 ## Using it
 
@@ -225,9 +226,9 @@ but fits Railway's Hobby plan.
 docker build -t medai-backend .
 docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... medai-backend
 
-# Frontend (the API URL is inlined into the browser bundle at build time)
-docker build --build-arg NEXT_PUBLIC_API_URL=http://localhost:8000 -t medai-frontend frontend
-docker run --rm -p 3000:3000 medai-frontend
+# Frontend (backend address is a runtime setting; the image is built once)
+docker build -t medai-frontend frontend
+docker run --rm -p 3000:3000 -e API_URL=http://localhost:8000 medai-frontend
 ```
 
 Or both at once, with [docker-compose.yml](docker-compose.yml) reading the
@@ -238,11 +239,13 @@ docker compose up --build -d      # backend on :8000, frontend on :3000
 docker compose down
 ```
 
-For a server other than your own machine, set `NEXT_PUBLIC_API_URL` in `.env`
-to the backend URL the browser will reach, and put the frontend's URL in
-`FRONTEND_ORIGINS`. If ports 8000 or 3000 are taken, `BACKEND_PORT` and
-`FRONTEND_PORT` move the host ports (adjust those two URLs to match). Railway
-does not use this file; it builds the two Dockerfiles itself.
+For a server other than your own machine, set `API_URL` in `.env` to the
+backend URL the browser will reach, and put the frontend's URL in
+`FRONTEND_ORIGINS`. Both are runtime settings: `docker compose up -d` after a
+change restarts the containers without rebuilding. If ports 8000 or 3000 are
+taken, `BACKEND_PORT` and `FRONTEND_PORT` move the host ports (adjust those
+two URLs to match). Railway does not use this file; it builds the two
+Dockerfiles itself.
 
 What the backend build does, and why:
 
@@ -286,9 +289,10 @@ Steps, on the Hobby plan or above:
 3. Set `GITHUB_REPO` at the top of the IaC file to `owner/medical-ai` before
    the apply, or connect the repository to both services in the dashboard
    afterwards. Then click **Generate Domain** on each service. The two services find each other
-   through those domains: the frontend's `NEXT_PUBLIC_API_URL` and the
-   backend's `FRONTEND_ORIGINS` (CORS) are reference variables that resolve to
-   them. Add any custom domain you attach later to `FRONTEND_ORIGINS`.
+   through those domains: the frontend's `API_URL` and the backend's
+   `FRONTEND_ORIGINS` (CORS) are reference variables that resolve to them, and
+   both are read at runtime, so a domain change needs no rebuild. Add any
+   custom domain you attach later to `FRONTEND_ORIGINS`.
 4. Set `ANTHROPIC_API_KEY` on the backend service (dashboard or
    `railway variables set`). The IaC file marks it as preserved so an apply
    never overwrites or removes it.

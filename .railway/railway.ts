@@ -78,9 +78,9 @@ export default defineRailway(() => {
       sleepApplication: false,
     },
     env: {
-      // Inlined into the browser bundle at build time (frontend/Dockerfile), so a
-      // change here needs a redeploy of the frontend.
-      NEXT_PUBLIC_API_URL: "https://${{backend.RAILWAY_PUBLIC_DOMAIN}}",
+      // Read by the Next.js server at request time and handed to the browser, so
+      // the image is built once and this can change without a rebuild.
+      API_URL: "https://${{backend.RAILWAY_PUBLIC_DOMAIN}}",
     },
   });
 

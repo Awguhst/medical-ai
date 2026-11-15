@@ -1,9 +1,24 @@
 import type { Attachment, ChatEvent, Health } from "./types";
 
-export const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(
-  /\/$/,
-  "",
-);
+declare global {
+  interface Window {
+    /** Injected by app/layout.tsx from the server's API_URL variable at request time. */
+    __MEDAI_API_URL__?: string;
+  }
+}
+
+const DEFAULT_API_URL = "http://localhost:8000";
+
+/**
+ * Where the backend lives, resolved on every call so one frontend image works
+ * for any backend address: the value the server injected into the page from
+ * its API_URL environment variable, then NEXT_PUBLIC_API_URL baked in at build
+ * time, then the local default.
+ */
+export function apiUrl(): string {
+  const injected = typeof window !== "undefined" ? window.__MEDAI_API_URL__ : undefined;
+  return (injected || process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
+}
 
 export class ApiError extends Error {
   code: string;
@@ -33,7 +48,7 @@ async function toApiError(response: Response): Promise<ApiError> {
 async function request(path: string, init: RequestInit = {}): Promise<Response> {
   let response: Response;
   try {
-    response = await fetch(`${API_URL}${path}`, init);
+    response = await fetch(`${apiUrl()}${path}`, init);
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") throw err;
     throw new ApiError(UNREACHABLE, "unreachable");

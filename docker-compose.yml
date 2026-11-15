@@ -6,11 +6,12 @@
 #
 # Settings come from the .env file next to this file (copy .env.example), the
 # same one the backend reads when it runs outside Docker. Two values matter for
-# anything other than localhost: NEXT_PUBLIC_API_URL must be the backend URL as
-# seen from the user's browser, and FRONTEND_ORIGINS must list the frontend's
-# URL for CORS. BACKEND_PORT and FRONTEND_PORT change the host ports if 8000 or
-# 3000 are taken (then adjust those two URLs to match). Railway ignores this
-# file and builds the two Dockerfiles itself.
+# anything other than localhost: API_URL must be the backend URL as seen from
+# the user's browser, and FRONTEND_ORIGINS must list the frontend's URL for
+# CORS. Both are runtime settings: change them and `docker compose up -d`
+# restarts the containers, no rebuild. BACKEND_PORT and FRONTEND_PORT change
+# the host ports if 8000 or 3000 are taken (then adjust those two URLs to
+# match). Railway ignores this file and builds the two Dockerfiles itself.
 
 name: medai
 
@@ -39,12 +40,11 @@ services:
   frontend:
     build:
       context: ./frontend
-      args:
-        # Inlined into the browser bundle while building; change it and rebuild.
-        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
     image: medai-frontend
     environment:
       PORT: "3000"
+      # Injected into every page at request time; the browser calls it directly.
+      API_URL: ${API_URL:-http://localhost:8000}
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     depends_on:
