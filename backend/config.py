@@ -106,6 +106,9 @@ class Settings:
 
     # --- HTTP -----------------------------------------------------------
     frontend_origins: tuple[str, ...] = ("http://localhost:3000", "http://127.0.0.1:3000")
+    # The Next.js static export. When the folder exists, this process serves the
+    # frontend from "/" next to the API (the Docker image is built that way).
+    frontend_dist: Path | None = None
 
     @property
     def claude_configured(self) -> bool:
@@ -155,4 +158,5 @@ def get_settings() -> Settings:
         max_upload_bytes=_int("MAX_UPLOAD_MB", 10) * 1024 * 1024,
         image_ttl_seconds=_int("IMAGE_TTL_MINUTES", 60) * 60,
         frontend_origins=origins,
+        frontend_dist=_resolve_path(os.getenv("FRONTEND_DIST", "./frontend/out")),
     )

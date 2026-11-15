@@ -16,6 +16,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from dotenv import dotenv_values
 
@@ -32,6 +33,13 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name
 for noisy in ("httpx", "httpx2", "httpcore", "httpcore2", "anthropic"):
     logging.getLogger(noisy).setLevel(logging.WARNING)
 logger = logging.getLogger("medai")
+
+
+def _frontend_dist():
+    """The Next.js static export, when it sits next to the API (the Docker image
+    puts it there), so that one process serves the whole app from one address."""
+    dist = get_settings().frontend_dist
+    return dist if dist is not None and (dist / "index.html").is_file() else None
 
 
 def _claude_key_source() -> str:
@@ -66,6 +74,11 @@ async def lifespan(_: FastAPI):
         "MedAI backend starting | claude_configured=%s key_source=%s model=%s | yolo=%s | image_triage=%s",
         settings.claude_configured, _claude_key_source(), settings.anthropic_model, yolo.status,
         triage.status().status,
+    )
+    dist = _frontend_dist()
+    logger.info(
+        "frontend: %s",
+        f"served by this process from {dist}" if dist else "not bundled (run the Next.js dev server separately)",
     )
     if triage.enabled:
         # Load the vision transformer off the event loop so the first upload is quick.
@@ -137,3 +150,9 @@ async def health() -> HealthResponse:
         image_triage=ImageTriageHealth(status=triage.status, detail=triage.detail, model=triage.model),
         tools=get_registry().names(),
     )
+
+
+# Bundled frontend. Mounted last, so every /api route above wins over this
+# catch-all; html=True serves index.html at "/" and 404.html for unknown paths.
+if (_dist := _frontend_dist()) is not None:
+    app.mount("/", StaticFiles(directory=_dist, html=True), name="frontend")

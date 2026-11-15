@@ -1,15 +1,27 @@
 # syntax=docker/dockerfile:1
 #
-# MedAI Bulgaria backend: FastAPI + the X-ray Analyzer (YOLO, CPU) + CLIP image
-# triage (CPU). No GPU is needed or used.
+# MedAI Bulgaria, the whole app in one image: the Next.js frontend as static
+# files, served by the FastAPI backend next to the API, plus the X-ray Analyzer
+# (YOLO, CPU) and CLIP image triage (CPU). No GPU is needed or used.
 #
-# The build context is the REPOSITORY ROOT (this file lives there on purpose),
-# so that both backend/ and models/ are available. On Railway, leave the backend
-# service's root directory empty; the frontend has its own Dockerfile in frontend/.
+# The build context is the REPOSITORY ROOT (this file lives there on purpose).
+# On Railway, connect the repository and leave the root directory empty.
 #
-#   docker build -t medai-backend .
-#   docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... medai-backend
+#   docker build -t medai .
+#   docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... medai
+#   -> http://localhost:8000
 
+# --- Stage 1: the frontend, as static files -----------------------------------
+FROM node:22-alpine AS frontend
+WORKDIR /src
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend/ ./
+ENV NEXT_TELEMETRY_DISABLED=1
+# next.config.ts has output: "export"; the result lands in /src/out.
+RUN npm run build
+
+# --- Stage 2: the API, which also serves those files --------------------------
 FROM python:3.12-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -52,6 +64,7 @@ ARG YOLO_WEIGHTS_URL="https://huggingface.co/jayanthapoojary1989/rsna-pneumonia-
 ARG YOLO_WEIGHTS_SHA256="a514f8e1706dcb640198e84813372cd122c57d3fa47b993a9a7900d247dbae43"
 COPY --chown=medai:medai models/README.md /app/models/README.md
 COPY --chown=medai:medai backend/ /app/backend/
+COPY --from=frontend --chown=medai:medai /src/out /app/frontend_dist
 
 USER medai
 
@@ -65,7 +78,8 @@ RUN if [ -n "$YOLO_WEIGHTS_URL" ]; then \
 # fresh container must not download 600 MB before it can label an upload. The
 # cache is written by the runtime user, so its lock files stay writable.
 ENV IMAGE_TRIAGE_CACHE_DIR=/app/models/triage \
-    YOLO_WEIGHTS_PATH=/app/models/medical_yolo.pt
+    YOLO_WEIGHTS_PATH=/app/models/medical_yolo.pt \
+    FRONTEND_DIST=/app/frontend_dist
 RUN python prefetch_models.py
 
 EXPOSE 8000

@@ -1,22 +1,26 @@
-# Build context for the backend image (Dockerfile at the repository root).
-# Only backend/ and models/README.md are needed; everything else stays out so
-# secrets never reach the image and the context stays small.
+# Build context for the single app image (Dockerfile at the repository root).
+# The frontend sources are built inside the image; dependencies, build output
+# and anything secret stay out.
 .git
 .gitignore
 .railway
 .env
 **/.env
 **/.env.*
-frontend
 backend/.venv
 **/__pycache__
 **/*.pyc
+frontend/node_modules
+frontend/.next
+frontend/out
+frontend/tsconfig.tsbuildinfo
+frontend/next-env.d.ts
 # Weights are downloaded and checksum-verified during the build, never copied
 # from a working tree. The triage cache is rebuilt inside the image.
 models/*.pt
 models/*.onnx
 models/triage
-# Root tooling for the Railway IaC file, not part of the backend image.
+# Root tooling for the Railway IaC file, not part of the image.
 package.json
 package-lock.json
 node_modules

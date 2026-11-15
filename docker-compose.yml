@@ -1,61 +1,30 @@
-# Runs the whole app on one machine: backend on :8000, frontend on :3000.
+# Runs the whole app (frontend + API in one container) on http://localhost:8000.
 #
 #   docker compose up --build -d
-#   docker compose logs -f backend
+#   docker compose logs -f
 #   docker compose down
 #
-# Settings come from the .env file next to this file (copy .env.example), the
-# same one the backend reads when it runs outside Docker. Two values matter for
-# anything other than localhost: API_URL must be the backend URL as seen from
-# the user's browser, and FRONTEND_ORIGINS must list the frontend's URL for
-# CORS. Both are runtime settings: change them and `docker compose up -d`
-# restarts the containers, no rebuild. BACKEND_PORT and FRONTEND_PORT change
-# the host ports if 8000 or 3000 are taken (then adjust those two URLs to
-# match). Railway ignores this file and builds the two Dockerfiles itself.
+# Settings come from the .env file next to this file (copy .env.example); at
+# least ANTHROPIC_API_KEY must be set. PORT_ON_HOST moves the host port if 8000
+# is taken. Railway ignores this file and builds the Dockerfile itself.
 
 name: medai
 
 services:
-  backend:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    image: medai-backend
+  app:
+    build: .
+    image: medai
     env_file:
       - path: .env
         required: false
     environment:
       PORT: "8000"
-      FRONTEND_ORIGINS: ${FRONTEND_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     ports:
-      - "${BACKEND_PORT:-8000}:8000"
+      - "${PORT_ON_HOST:-8000}:8000"
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/api/health"]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 30s
-    restart: unless-stopped
-
-  frontend:
-    build:
-      context: ./frontend
-    image: medai-frontend
-    environment:
-      PORT: "3000"
-      # Injected into every page at request time; the browser calls it directly.
-      API_URL: ${API_URL:-http://localhost:8000}
-    ports:
-      - "${FRONTEND_PORT:-3000}:3000"
-    depends_on:
-      backend:
-        condition: service_healthy
-    healthcheck:
-      # 127.0.0.1 on purpose: in the Alpine image "localhost" resolves to IPv6
-      # first, and the Next.js server listens on IPv4.
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:3000/"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 10s
     restart: unless-stopped

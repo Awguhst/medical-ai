@@ -1,23 +1,15 @@
 import type { Attachment, ChatEvent, Health } from "./types";
 
-declare global {
-  interface Window {
-    /** Injected by app/layout.tsx from the server's API_URL variable at request time. */
-    __MEDAI_API_URL__?: string;
-  }
-}
-
-const DEFAULT_API_URL = "http://localhost:8000";
-
 /**
- * Where the backend lives, resolved on every call so one frontend image works
- * for any backend address: the value the server injected into the page from
- * its API_URL environment variable, then NEXT_PUBLIC_API_URL baked in at build
- * time, then the local default.
+ * Where the backend lives. In production the backend serves this frontend
+ * itself, so API calls go to the same origin and need no address at all. During
+ * `next dev` the API runs separately on port 8000. NEXT_PUBLIC_API_URL
+ * overrides both when the frontend is hosted apart from the API.
  */
 export function apiUrl(): string {
-  const injected = typeof window !== "undefined" ? window.__MEDAI_API_URL__ : undefined;
-  return (injected || process.env.NEXT_PUBLIC_API_URL || DEFAULT_API_URL).replace(/\/+$/, "");
+  const configured = process.env.NEXT_PUBLIC_API_URL;
+  if (configured) return configured.replace(/\/+$/, "");
+  return process.env.NODE_ENV === "development" ? "http://localhost:8000" : "";
 }
 
 export class ApiError extends Error {

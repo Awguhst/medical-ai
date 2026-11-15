@@ -16,6 +16,8 @@ import io
 import json
 import os
 import sys
+import tempfile
+from pathlib import Path
 from types import SimpleNamespace
 
 # Deterministic configuration for the checks, set before config is imported.
@@ -25,6 +27,14 @@ os.environ["YOLO_WEIGHTS_PATH"] = "./models/does_not_exist.pt"
 os.environ["YOLO_ALLOW_DEMO_MODE"] = "true"
 os.environ["MAX_TOOL_ITERATIONS"] = "2"
 os.environ["IMAGE_TRIAGE_ENABLED"] = "false"  # no model download during checks
+
+# A stand-in for the Next.js static export, to check that the API serves it.
+_FRONTEND_DIST = Path(tempfile.mkdtemp(prefix="medai_smoke_frontend_"))
+(_FRONTEND_DIST / "_next" / "static").mkdir(parents=True)
+(_FRONTEND_DIST / "index.html").write_text("<!doctype html><title>MedAI smoke index</title>", encoding="utf-8")
+(_FRONTEND_DIST / "404.html").write_text("<!doctype html><title>MedAI smoke 404</title>", encoding="utf-8")
+(_FRONTEND_DIST / "_next" / "static" / "chunk.js").write_text("console.log('ok')", encoding="utf-8")
+os.environ["FRONTEND_DIST"] = str(_FRONTEND_DIST)
 
 import numpy as np  # noqa: E402
 from fastapi.testclient import TestClient  # noqa: E402
@@ -382,6 +392,17 @@ def main() -> None:
         check(sorted(health["tools"]) == ["analyze_xray", "find_doctors", "lookup_medication", "read_document"],
               "only the four expected tools are registered")
         check("test-key" not in json.dumps(health), "health never exposes the API key")
+
+        print("bundled frontend")
+        page = client.get("/")
+        check(page.status_code == 200 and "MedAI smoke index" in page.text,
+              "/ serves the frontend's index.html when the static export is present")
+        check(client.get("/_next/static/chunk.js").text == "console.log('ok')", "static assets are served")
+        check(client.get("/api/health").headers["content-type"].startswith("application/json"),
+              "/api routes take precedence over the frontend mount")
+        missing = client.get("/no-such-page")
+        check(missing.status_code == 404 and "MedAI smoke 404" in missing.text,
+              "unknown paths get the frontend's 404 page")
 
         print("uploads")
         check(upload(client, b"not an image at all", "x.png").status_code == 400,

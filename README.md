@@ -78,10 +78,10 @@ npm run dev
 
 Open <http://localhost:3000>.
 
-If the backend runs elsewhere, tell the frontend where: `API_URL` in the
-environment of the Next.js server (read at request time and handed to the
-browser) or `NEXT_PUBLIC_API_URL` in `frontend/.env.local` (baked in at build
-time). Then add the frontend's origin to `FRONTEND_ORIGINS` in `.env`.
+The dev server talks to the API on <http://localhost:8000>. If the backend
+runs elsewhere, set `NEXT_PUBLIC_API_URL` in `frontend/.env.local` and add the
+frontend's origin to `FRONTEND_ORIGINS` in `.env`. In the Docker image the
+backend serves the frontend itself, so neither setting is needed there.
 
 ## Using it
 
@@ -214,41 +214,33 @@ or „Как се пие Нурофен?“.
 
 ## Deploying with Docker and Railway
 
+One image, one process, one address. The Dockerfile at the repository root
+builds the Next.js frontend as static files and bakes them into the Python
+image, where FastAPI serves them next to the API. There is no CORS to
+configure and no frontend URL to set.
+
 No GPU is needed: both models run on the CPU (about 0.3 s per X-ray on a
-desktop core, one to two seconds on a small cloud vCPU) and the backend uses
+desktop core, one to two seconds on a small cloud vCPU) and the process uses
 roughly 1.5 GB of memory with both models loaded. That rules out free tiers
 but fits Railway's Hobby plan.
 
-### Images
+### Docker
 
 ```bash
-# Backend (build context = repository root; both models are baked in)
-docker build -t medai-backend .
-docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... medai-backend
+docker build -t medai .
+docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=sk-ant-... medai
 
-# Frontend (backend address is a runtime setting; the image is built once)
-docker build -t medai-frontend frontend
-docker run --rm -p 3000:3000 -e API_URL=http://localhost:8000 medai-frontend
+# or, with the settings read from .env:
+docker compose up --build -d
 ```
 
-Or both at once, with [docker-compose.yml](docker-compose.yml) reading the
-same `.env` the backend uses outside Docker:
+Open <http://localhost:8000>. If 8000 is taken, `PORT_ON_HOST=8080 docker compose up -d`
+moves the host port.
 
-```bash
-docker compose up --build -d      # backend on :8000, frontend on :3000
-docker compose down
-```
+What the build does, and why:
 
-For a server other than your own machine, set `API_URL` in `.env` to the
-backend URL the browser will reach, and put the frontend's URL in
-`FRONTEND_ORIGINS`. Both are runtime settings: `docker compose up -d` after a
-change restarts the containers without rebuilding. If ports 8000 or 3000 are
-taken, `BACKEND_PORT` and `FRONTEND_PORT` move the host ports (adjust those
-two URLs to match). Railway does not use this file; it builds the two
-Dockerfiles itself.
-
-What the backend build does, and why:
-
+* builds the frontend with `next build` (static export) and copies the result
+  into the image, where the backend serves it from `/`;
 * installs the CPU build of PyTorch first, so the multi-gigabyte CUDA wheels
   never enter the image;
 * downloads the X-ray Analyzer weights from the Hugging Face repository named
@@ -263,50 +255,31 @@ What the backend build does, and why:
 
 ### Railway
 
-The project is described in [.railway/railway.ts](.railway/railway.ts)
-(Railway's infrastructure as code; `railway.json` is being retired on
-2026-12-01). It defines two services from this repository:
+Hobby plan or above. Everything happens in the dashboard:
 
-| Service | Build | Root directory | Health check |
-|---|---|---|---|
-| `backend` | `Dockerfile` at the repository root | empty | `GET /api/health` |
-| `frontend` | `frontend/Dockerfile` | `frontend` | `GET /` |
+1. **New project → Deploy from GitHub repo**, pick this repository and leave
+   the root directory empty. Railway finds the Dockerfile and builds it. The
+   first build downloads about 1 GB and takes several minutes.
+2. **Variables**: add `ANTHROPIC_API_KEY`.
+3. **Settings → Networking → Generate Domain**. Open the domain: that is the
+   app. `/api/health` on the same domain shows whether the key and both
+   models are in place.
+4. Recommended, **Settings → Deploy**: Healthcheck Path `/api/health`,
+   Serverless (app sleeping) off, one replica, restart on failure.
 
-Steps, on the Hobby plan or above:
-
-1. Push this repository to GitHub and create an empty Railway project.
-2. Install the [Railway CLI](https://docs.railway.com/guides/cli) (5.42.1 or
-   newer), then from the repository root:
-
-   ```bash
-   npm install                     # the `railway` SDK that .railway/railway.ts imports
-   railway login
-   railway link                    # choose the project and environment
-   railway config plan             # shows what will be created
-   railway config apply
-   ```
-
-3. Set `GITHUB_REPO` at the top of the IaC file to `owner/medical-ai` before
-   the apply, or connect the repository to both services in the dashboard
-   afterwards. Then click **Generate Domain** on each service. The two services find each other
-   through those domains: the frontend's `API_URL` and the backend's
-   `FRONTEND_ORIGINS` (CORS) are reference variables that resolve to them, and
-   both are read at runtime, so a domain change needs no rebuild. Add any
-   custom domain you attach later to `FRONTEND_ORIGINS`.
-4. Set `ANTHROPIC_API_KEY` on the backend service (dashboard or
-   `railway variables set`). The IaC file marks it as preserved so an apply
-   never overwrites or removes it.
-5. Trigger a deploy. The first backend build downloads about 1 GB (PyTorch,
-   weights, CLIP) and takes a few minutes; the health check passes as soon as
-   uvicorn is up, while the triage model finishes warming up in the background.
+[.railway/railway.ts](.railway/railway.ts) sets step 4 for you through
+Railway's infrastructure as code (`railway.json` is being retired on
+2026-12-01): `npm install`, `railway login`, `railway link`,
+`railway config plan`, `railway config apply`. `SERVICE_NAME` in that file
+must match the service's name in Railway.
 
 Notes:
 
 * Keep one replica and leave app sleeping off: uploaded images live in the
   process that received them, and a cold start reloads both models.
-* Expect roughly 1.5 to 2 GB of memory for the backend. Setting
-  `IMAGE_TRIAGE_ENABLED=false` roughly halves that, at the price of the
-  automatic X-ray recognition on upload.
+* Expect roughly 1.5 to 2 GB of memory. Setting `IMAGE_TRIAGE_ENABLED=false`
+  roughly halves that, at the price of the automatic X-ray recognition on
+  upload.
 * Uploads are stored in the container's temporary directory and deleted after
   `IMAGE_TTL_MINUTES`; nothing needs a volume.
 * Before a public deployment, read the Superdoc and Framar notes above:
@@ -315,7 +288,7 @@ Notes:
 ## Checks
 
 ```bash
-# Backend: 114 offline checks (no network, key or weights needed)
+# Backend: 118 offline checks (no network, key or weights needed)
 cd backend && python smoke_test.py
 
 # Frontend
@@ -371,12 +344,11 @@ id the browser keeps in `sessionStorage`).
 │   ├── components/                 ChatInterface, ChatMessage, ChatInput, Sidebar,
 │   │                               ImageAttachment, ToolResult, ConsentDialog,
 │   │                               SettingsDialog, ui/ (shadcn-style primitives)
-│   ├── lib/                        api.ts, storage.ts, types.ts, utils.ts
-│   └── Dockerfile                  Next.js standalone image
+│   └── lib/                        api.ts, storage.ts, types.ts, utils.ts
 ├── models/                         YOLO weights go here (README.md inside); triage/ is the CLIP cache
-├── .railway/railway.ts             Railway infrastructure as code (two services)
-├── Dockerfile                      Backend image (context: repository root, models baked in)
-├── docker-compose.yml              Both services on one machine (not used by Railway)
+├── .railway/railway.ts             Railway infrastructure as code (one service)
+├── Dockerfile                      The whole app in one image: frontend static export + API + models
+├── docker-compose.yml              Runs that image with the settings from .env (not used by Railway)
 ├── package.json                    Root tooling only: the `railway` SDK for .railway/railway.ts
 └── .env.example
 ```
