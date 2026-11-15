@@ -22,7 +22,7 @@ import { defineRailway, github, preserve, project, service } from "railway/iac";
 
 // The GitHub repository Railway deploys from, as "owner/medical-ai". Leave it
 // empty to keep whatever repository each service is connected to in the dashboard.
-const GITHUB_REPO = "";
+const GITHUB_REPO = "Awguhst/medical-ai";
 const BRANCH = "main";
 
 const source = (rootDirectory?: string) =>
