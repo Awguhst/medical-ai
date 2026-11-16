@@ -30,10 +30,11 @@ Browser (Next.js)  ──►  FastAPI backend  ──►  Claude API (text + too
   answers, so the user does not have to ask, and for a document the label
   tells Claude to call the reader.
 * Claude calls `analyze_xray` with the `image_id`. The backend validates the
-  call, runs YOLO locally, draws the boxes, returns the structured result to
-  Claude as a `tool_result`, and streams the tool activity and the annotated
-  image into the chat.
-* Claude explains the result in the interface language, including its limitations.
+  call, runs YOLO locally, returns the structured result to Claude as a
+  `tool_result`, and streams the tool activity into the chat.
+* Claude puts the result into words in the interface language: what the
+  analyzer saw, where in the picture, how sure it was, and the limitations.
+  The chat shows no picture with boxes and no table of scores.
 
 ## Requirements
 
@@ -106,7 +107,7 @@ performed.
 
 To try the full interface anyway, enable **Настройки → Демо режим**. Demo
 results are random placeholders and are labelled as a simulation in the tool
-output, on the annotated image and in the chat. Demo mode is unavailable when
+output and in the chat. Demo mode is unavailable when
 a real model is configured and can be turned off on the server
 (`YOLO_ALLOW_DEMO_MODE=false`).
 

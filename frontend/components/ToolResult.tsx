@@ -16,7 +16,6 @@ import type { ToolPart } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import DoctorResults from "@/components/DoctorResults";
 import DocumentResults from "@/components/DocumentResults";
-import ImageAttachment from "@/components/ImageAttachment";
 import MedicationResults from "@/components/MedicationResults";
 
 const OK_STATUSES = new Set(["success", "partial"]);
@@ -45,7 +44,6 @@ export default function ToolResult({ part }: { part: ToolPart }) {
   const status = result?.status ?? "";
   const ok = OK_STATUSES.has(status);
   const info = INFO_STATUSES.has(status);
-  const detections = result?.detections ?? [];
   const isDoctors = result?.kind === "doctors" || part.toolName === "find_doctors";
   const isMedications = result?.kind === "medications" || part.toolName === "lookup_medication";
   const isDocument = result?.kind === "document" || part.toolName === "read_document";
@@ -137,27 +135,13 @@ export default function ToolResult({ part }: { part: ToolPart }) {
         <DocumentResults result={result} />
       )}
 
-      {!running && result && !isDoctors && !isMedications && !isDocument && (simulated || ok) && (
-        <div className="animate-fade space-y-3 border-t border-line p-4">
-          {simulated && (
-            <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] font-medium leading-snug text-amber-900">
-              {t("demo_simulation_note")}
-            </p>
-          )}
-
-          {result.annotated_image_id && (
-            <ImageAttachment
-              imageId={result.annotated_image_id}
-              alt={simulated ? t("demo_image_alt") : t("xray_annotated_model_alt")}
-              sizeClassName="max-h-[26rem] max-w-full"
-            />
-          )}
-
-          {ok && detections.length === 0 && (
-            <p className="rounded-xl border border-line bg-fill px-3 py-2.5 text-[13px] leading-snug text-ink-700">
-              {t("no_detections")}
-            </p>
-          )}
+      {/* The X-ray findings are in the reply itself, in words; the card only
+          flags a simulation. */}
+      {!running && result && simulated && (
+        <div className="animate-fade border-t border-line p-4">
+          <p className="rounded-xl border border-amber-200 bg-amber-50 px-3 py-2.5 text-[13px] font-medium leading-snug text-amber-900">
+            {t("demo_simulation_note")}
+          </p>
         </div>
       )}
     </div>

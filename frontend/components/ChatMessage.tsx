@@ -6,7 +6,7 @@ import remarkGfm from "remark-gfm";
 import { CircleAlert, FileText, Info, Phone, RotateCcw } from "lucide-react";
 
 import { useT } from "@/lib/i18n";
-import type { ChatMessage as Message, ToolPart } from "@/lib/types";
+import type { ChatMessage as Message } from "@/lib/types";
 import { LogoMark } from "@/components/Logo";
 import ImageAttachment from "@/components/ImageAttachment";
 import ToolResult from "@/components/ToolResult";
@@ -73,24 +73,6 @@ function Markdown({ text }: { text: string }) {
       >
         {text}
       </ReactMarkdown>
-    </div>
-  );
-}
-
-/** With tool activity hidden, the only output worth showing is a picture the
-    reply text cannot carry: the annotated X-ray. Everything else is in the words. */
-function QuietToolOutput({ part }: { part: ToolPart }) {
-  const t = useT();
-  const result = part.state === "done" ? part.result : undefined;
-  if (!result?.annotated_image_id) return null;
-  return (
-    <div className="animate-rise pt-1">
-      <ImageAttachment
-        imageId={result.annotated_image_id}
-        alt={result.simulated ? t("demo_image_alt") : t("xray_annotated_alt")}
-        caption={result.simulated ? t("demo_caption") : undefined}
-        sizeClassName="max-h-[26rem] max-w-full"
-      />
     </div>
   );
 }
@@ -177,9 +159,7 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
             ) : null
           ) : showTools ? (
             <ToolResult key={part.toolUseId} part={part} />
-          ) : (
-            <QuietToolOutput key={part.toolUseId} part={part} />
-          ),
+          ) : null,
         )}
 
         {waitingForText && <TypingDots />}

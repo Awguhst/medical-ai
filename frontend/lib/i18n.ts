@@ -83,10 +83,6 @@ const bg = {
   emergency_title: "Възможен спешен случай",
   emergency_1: "Ако състоянието е тежко или се влошава, обадете се незабавно на",
   emergency_2: ". Не чакайте отговор от MedAI.",
-  demo_image_alt: "Демо изображение със симулирани рамки",
-  xray_annotated_alt: "Рентгенова снимка с отбелязани области",
-  xray_annotated_model_alt: "Рентгенова снимка с отбелязани области от модела",
-  demo_caption: "Демо: симулирани рамки, без медицинско значение",
   pdf_document: "PDF документ",
   pdf_page_one: "1 стр.",
   pdf_pages: "{count} стр.",
@@ -257,9 +253,7 @@ const bg = {
   tool_running: "Изпълнение...",
   tool_finished: "Инструментът приключи.",
   demo_simulation_note:
-    "Това е симулация за тестване на интерфейса. Никакъв модел не е анализирал снимката. Рамките и стойностите са случайни и нямат медицинско значение.",
-  no_detections:
-    "Моделът не отбеляза области над зададения праг. Това не означава, че снимката е нормална.",
+    "Това е симулация за тестване на интерфейса. Никакъв модел не е анализирал снимката. Резултатът е случаен и няма медицинско значение.",
 
   // --- images ----------------------------------------------------------------------------
   image_unavailable:
@@ -348,10 +342,6 @@ const en: Record<MessageKey, string> = {
   emergency_title: "Possible emergency",
   emergency_1: "If the condition is severe or getting worse, call",
   emergency_2: " immediately. Do not wait for MedAI's reply.",
-  demo_image_alt: "Demo image with simulated boxes",
-  xray_annotated_alt: "X-ray image with marked areas",
-  xray_annotated_model_alt: "X-ray image with areas marked by the model",
-  demo_caption: "Demo: simulated boxes, no medical meaning",
   pdf_document: "PDF document",
   pdf_page_one: "1 page",
   pdf_pages: "{count} pages",
@@ -515,9 +505,7 @@ const en: Record<MessageKey, string> = {
   tool_running: "Running...",
   tool_finished: "The tool has finished.",
   demo_simulation_note:
-    "This is a simulation for testing the interface. No model has analysed the image. The boxes and values are random and have no medical meaning.",
-  no_detections:
-    "The model marked no areas above the set threshold. This does not mean the image is normal.",
+    "This is a simulation for testing the interface. No model has analysed the image. The result is random and has no medical meaning.",
 
   image_unavailable: "The image is no longer available (temporary files are deleted automatically).",
   image_loading: "Loading the image",

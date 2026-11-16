@@ -522,9 +522,10 @@ def build_registry() -> ToolRegistry:
             description=(
                 "The X-ray Analyzer: analyze an uploaded X-ray image using a locally hosted, "
                 "medically trained detection model (call it the X-ray Analyzer when talking "
-                "to the user, never by its architecture). Returns structured object-detection "
-                "results, including class labels, bounding boxes, and model scores. "
-                "The tool does not establish a medical diagnosis. "
+                "to the user, never by its architecture). Returns structured detection "
+                "results: class labels, the position of each region in the image and model "
+                "scores. The user sees none of this directly, only your words, so put the "
+                "findings into plain language. The tool does not establish a medical diagnosis. "
                 "Call it as soon as the user attaches an image in this conversation, "
                 "unless their words or the file name show it is a document (then use "
                 "read_document). Do not wait for the user to ask for an analysis or to "
