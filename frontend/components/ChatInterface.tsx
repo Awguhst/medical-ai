@@ -5,7 +5,6 @@ import {
   Activity,
   ArrowDown,
   Brain,
-  FlaskConical,
   HeartPulse,
   Menu,
   PanelLeft,
@@ -165,7 +164,6 @@ export default function ChatInterface() {
   const [activeId, setActiveId] = useState("");
   const [consent, setConsent] = useState(false);
   const [settings, setSettings] = useState<Settings>({
-    demoMode: false,
     showToolActivity: false,
     language: DEFAULT_LANGUAGE,
     theme: DEFAULT_THEME,
@@ -264,8 +262,6 @@ export default function ChatInterface() {
   );
   const messages = active?.messages ?? [];
   const busy = streamingId !== null;
-  const demoActive =
-    settings.demoMode && Boolean(health?.yolo.demo_mode_allowed) && health?.yolo.status !== "ready";
 
   // --- scrolling ----------------------------------------------------------
   const scrollToBottom = useCallback((smooth = false) => {
@@ -348,7 +344,6 @@ export default function ChatInterface() {
       const payload: ChatPayload = {
         conversation_id: conversationId,
         consent: true,
-        demo_mode: demoActive,
         history: toHistory(prior),
         message: { text, attachment_ids: attachments.map((a) => a.imageId) },
       };
@@ -382,7 +377,7 @@ export default function ChatInterface() {
         setStreamingId(null);
       }
     },
-    [demoActive, patchMessage, refreshHealth, sessionId, t],
+    [patchMessage, refreshHealth, sessionId, t],
   );
 
   const send = useCallback(
@@ -520,16 +515,6 @@ export default function ChatInterface() {
               >
                 {active?.title ?? t("new_conversation")}
               </h1>
-              {demoActive && (
-                <button
-                  type="button"
-                  onClick={() => setSettingsOpen(true)}
-                  className="focus-ring inline-flex shrink-0 items-center gap-1.5 rounded-lg border border-amber-200 bg-amber-50 px-2.5 py-1.5 text-xs font-semibold text-amber-800 transition-[background-color,border-color,scale] duration-200 ease-out-quart hover:border-amber-200/80 hover:bg-amber-100 active:scale-[0.97]"
-                >
-                  <FlaskConical className="size-3.5" />
-                  {t("demo_mode")}
-                </button>
-              )}
             </header>
 
             {/* System warnings */}
@@ -610,24 +595,7 @@ export default function ChatInterface() {
                       <span>
                         {yoloStatus === "incompatible"
                           ? t("xray_unavailable_incompatible")
-                          : t("xray_unavailable_missing")}{" "}
-                        {demoActive ? (
-                          <strong className="font-semibold text-amber-700">{t("demo_active_note")}</strong>
-                        ) : (
-                          health.yolo.demo_mode_allowed && (
-                            <>
-                              {t("demo_hint_1")}{" "}
-                              <button
-                                type="button"
-                                onClick={() => setSettingsOpen(true)}
-                                className="focus-ring rounded-sm font-semibold text-brand-300 underline-offset-2 transition-colors hover:text-brand-400 hover:underline"
-                              >
-                                {t("settings")}
-                              </button>
-                              {t("demo_hint_2")}
-                            </>
-                          )
-                        )}
+                          : t("xray_unavailable_missing")}
                       </span>
                     </p>
                   )}

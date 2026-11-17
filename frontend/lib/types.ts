@@ -16,7 +16,6 @@ export type Detection = {
   class_name: string;
   score: number;
   bbox: number[];
-  simulated?: boolean;
 };
 
 export type Doctor = {
@@ -85,7 +84,6 @@ export type ToolResultData = {
   doctors?: Doctor[];
   image_id?: string;
   annotated_image_id?: string | null;
-  simulated?: boolean;
   model_type?: string | null;
   model_classes?: string[];
   score_threshold?: number | null;
@@ -139,7 +137,6 @@ export type Language = "bg" | "en";
 export type ThemeName = "graphite" | "ember" | "dusk";
 
 export type Settings = {
-  demoMode: boolean;
   /** Show tool cards (status, raw results) in the chat; off = only the reply */
   showToolActivity: boolean;
   language: Language;
@@ -153,7 +150,6 @@ export type Health = {
   yolo: {
     status: "ready" | "not_configured" | "weights_missing" | "incompatible" | "error";
     detail: string;
-    demo_mode_allowed: boolean;
     classes: string[];
   };
   /** Absent on backends built before image triage */

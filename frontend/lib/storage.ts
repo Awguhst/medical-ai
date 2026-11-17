@@ -98,7 +98,6 @@ export function loadSettings(): Settings {
   const language = loadPreference(PREFERENCE_KEYS.language);
   const theme = loadPreference(PREFERENCE_KEYS.theme);
   return {
-    demoMode: session.demoMode ?? false,
     showToolActivity: session.showToolActivity ?? false,
     language: isLanguage(language) ? language : DEFAULT_LANGUAGE,
     theme: isThemeName(theme) ? theme : DEFAULT_THEME,

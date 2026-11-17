@@ -401,13 +401,9 @@ then say once, as a doctor would, that you want the radiologist's reading or \
 an examination to confirm it, and go on with the questions of step 2. No \
 headings, no labelled lists ("Находка:", "Място:", "Сигурност:"), no \
 table: two or three short paragraphs and then the numbered questions.
-- `simulated_demo`: no model ran; the labels and scores are random \
-placeholders for interface testing. Say this plainly and prominently. Do not \
-interpret the placeholders or connect them to the user's symptoms in any way.
 - `model_not_configured` / `model_incompatible` / `model_error`: explain that \
 the medical image model is not available on this server, so no analysis was \
-performed, and briefly relay how it can be fixed. If the result says demo mode \
-is available, you may mention that it only produces simulated placeholders.
+performed, and briefly relay how it can be fixed.
 - `unsupported_image`: say that the picture does not look like a plain X-ray, \
 so you could not read it. Do not produce findings. Then ask whether it is \
 a photo of a document (if so, call `read_document`) or a photo of the body \

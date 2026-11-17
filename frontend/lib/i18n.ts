@@ -22,7 +22,6 @@ const bg = {
   sidebar_hide_short: "Скрий менюто",
   new_conversation: "Нов разговор",
   attached_file: "Прикачен файл",
-  demo_mode: "Демо режим",
   backend_down_1: "Няма връзка със сървъра на MedAI. Стартирайте бекенда (",
   backend_down_2: ") и опитайте отново.",
   claude_unconfigured_1: "Claude API не е конфигуриран. Задайте",
@@ -39,9 +38,6 @@ const bg = {
     "Конфигурираният модел не е медицински, затова X-ray Analyzer е недостъпен.",
   xray_unavailable_missing:
     "Моделът на X-ray Analyzer не е конфигуриран на сървъра, затова реалният анализ на рентгенови снимки е недостъпен.",
-  demo_active_note: "Включен е демо режим: резултатите са симулирани.",
-  demo_hint_1: "За тест на интерфейса можете да включите демо режим от",
-  demo_hint_2: ".",
   settings: "Настройки",
   scroll_to_latest: "Към последното съобщение",
   footer_disclaimer:
@@ -126,7 +122,7 @@ const bg = {
   consent_accept: "Съгласен съм и продължавам",
 
   // --- settings dialog -----------------------------------------------------------
-  settings_description: "Състояние на системата, език и тема, демо режим и поверителност.",
+  settings_description: "Състояние на системата, език и тема, изглед и поверителност.",
   section_status: "Състояние",
   status_server: "Сървър",
   status_no_connection: "Няма връзка",
@@ -159,12 +155,6 @@ const bg = {
   theme_ember_hint: "Топло кафяво-черно, меден акцент",
   theme_dusk: "Здрач",
   theme_dusk_hint: "Тъмна слива, розов акцент",
-  section_demo: "Демо режим",
-  demo_title: "Симулиран анализ на снимки",
-  demo_text:
-    "За тестване на интерфейса, когато липсва медицински модел. Резултатите са случайни, ясно обозначени като „Демо“ и нямат медицинско значение.",
-  demo_unavailable_real: "Недостъпен: конфигуриран е реален медицински модел.",
-  demo_unavailable_server: "Демо режимът е изключен на сървъра.",
   section_view: "Изглед",
   show_tools_title: "Показвай работата на инструментите",
   show_tools_text:
@@ -249,11 +239,8 @@ const bg = {
 
   // --- tool card ---------------------------------------------------------------------
   tool_using: "MedAI използва инструмент",
-  demo_badge: "Демо",
   tool_running: "Изпълнение...",
   tool_finished: "Инструментът приключи.",
-  demo_simulation_note:
-    "Това е симулация за тестване на интерфейса. Никакъв модел не е анализирал снимката. Резултатът е случаен и няма медицинско значение.",
 
   // --- images ----------------------------------------------------------------------------
   image_unavailable:
@@ -284,7 +271,6 @@ const en: Record<MessageKey, string> = {
   sidebar_hide_short: "Hide menu",
   new_conversation: "New conversation",
   attached_file: "Attached file",
-  demo_mode: "Demo mode",
   backend_down_1: "No connection to the MedAI server. Start the backend (",
   backend_down_2: ") and try again.",
   claude_unconfigured_1: "The Claude API is not configured. Set",
@@ -301,9 +287,6 @@ const en: Record<MessageKey, string> = {
     "The configured model is not a medical model, so the X-ray Analyzer is unavailable.",
   xray_unavailable_missing:
     "The X-ray Analyzer model is not configured on the server, so real X-ray analysis is unavailable.",
-  demo_active_note: "Demo mode is on: the results are simulated.",
-  demo_hint_1: "To try the interface, you can turn on demo mode in",
-  demo_hint_2: ".",
   settings: "Settings",
   scroll_to_latest: "Jump to the latest message",
   footer_disclaimer:
@@ -383,7 +366,7 @@ const en: Record<MessageKey, string> = {
   consent_decline: "Not now",
   consent_accept: "I agree, continue",
 
-  settings_description: "System status, language and theme, demo mode and privacy.",
+  settings_description: "System status, language and theme, view and privacy.",
   section_status: "Status",
   status_server: "Server",
   status_no_connection: "No connection",
@@ -416,12 +399,6 @@ const en: Record<MessageKey, string> = {
   theme_ember_hint: "Warm brown-black, copper accent",
   theme_dusk: "Dusk",
   theme_dusk_hint: "Deep plum, rose accent",
-  section_demo: "Demo mode",
-  demo_title: "Simulated image analysis",
-  demo_text:
-    "For testing the interface when no medical model is available. Results are random, clearly marked as “Demo” and have no medical meaning.",
-  demo_unavailable_real: "Unavailable: a real medical model is configured.",
-  demo_unavailable_server: "Demo mode is disabled on the server.",
   section_view: "View",
   show_tools_title: "Show the tools at work",
   show_tools_text:
@@ -501,11 +478,8 @@ const en: Record<MessageKey, string> = {
     "Data comes from the public pages of framar.bg (leaflets and the interaction reference) at the time of the lookup and is for reference only. The absence of a listed interaction does not prove the combination is safe. Consult a doctor or pharmacist before taking anything. MedAI is not affiliated with Framar.",
 
   tool_using: "MedAI is using a tool",
-  demo_badge: "Demo",
   tool_running: "Running...",
   tool_finished: "The tool has finished.",
-  demo_simulation_note:
-    "This is a simulation for testing the interface. No model has analysed the image. The result is random and has no medical meaning.",
 
   image_unavailable: "The image is no longer available (temporary files are deleted automatically).",
   image_loading: "Loading the image",

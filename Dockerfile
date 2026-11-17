@@ -59,7 +59,7 @@ RUN pip install -r requirements.txt
 # building and verified against a pinned SHA-256, so the image always carries
 # exactly the checked file. Railway passes service variables with these names
 # into the build; set YOLO_WEIGHTS_URL to an empty string to build without a
-# model (the app then runs with demo mode only).
+# model (the app then runs without X-ray analysis).
 ARG YOLO_WEIGHTS_URL="https://huggingface.co/jayanthapoojary1989/rsna-pneumonia-yolov8s/resolve/main/pytorch_yolov8_model.pt"
 ARG YOLO_WEIGHTS_SHA256="a514f8e1706dcb640198e84813372cd122c57d3fa47b993a9a7900d247dbae43"
 COPY --chown=medai:medai models/README.md /app/models/README.md

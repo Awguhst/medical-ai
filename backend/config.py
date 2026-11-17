@@ -68,7 +68,6 @@ class Settings:
     yolo_weights_path: Path | None = None
     yolo_conf_threshold: float = 0.25
     yolo_image_size: int = 640
-    yolo_allow_demo_mode: bool = True
     tool_timeout_seconds: float = 60.0
 
     # --- Image triage (local CLIP vision transformer) ---------------------
@@ -141,7 +140,6 @@ def get_settings() -> Settings:
         yolo_weights_path=_resolve_path(os.getenv("YOLO_WEIGHTS_PATH", "")),
         yolo_conf_threshold=_float("YOLO_CONF_THRESHOLD", 0.25),
         yolo_image_size=_int("YOLO_IMAGE_SIZE", 640),
-        yolo_allow_demo_mode=_bool("YOLO_ALLOW_DEMO_MODE", True),
         tool_timeout_seconds=_float("TOOL_TIMEOUT_SECONDS", 60.0),
         image_triage_enabled=_bool("IMAGE_TRIAGE_ENABLED", True),
         image_triage_model=os.getenv("IMAGE_TRIAGE_MODEL", "").strip() or "openai/clip-vit-base-patch32",

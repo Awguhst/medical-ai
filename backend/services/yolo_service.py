@@ -5,18 +5,14 @@ Honesty rules enforced here, in code, not just in the prompt:
 * Inference only runs with custom weights configured via YOLO_WEIGHTS_PATH.
 * A general-purpose model (COCO / everyday objects) is rejected as
   incompatible — it is never presented as a medical model.
-* Without weights the result is `model_not_configured`. The simulated demo
-  mode must be explicitly requested and every simulated result is labelled
-  as such in the data, in the annotated image and in the UI.
+* Without weights the result is `model_not_configured`.
 * An image that does not look like a radiograph is reported as
   `unsupported_image` instead of being pushed through the model.
 """
 
 from __future__ import annotations
 
-import hashlib
 import logging
-import random
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -31,11 +27,6 @@ from config import Settings, get_settings
 logger = logging.getLogger("medai.yolo")
 
 DISCLAIMER = "Experimental model output, not a medical diagnosis."
-SIMULATED_DISCLAIMER = (
-    "SIMULATED DEMO DATA for user-interface testing only. No model analysed "
-    "this image. The boxes, labels and scores are random placeholders and "
-    "carry no medical meaning whatsoever."
-)
 
 # If a model's class list overlaps with these, it is an everyday-object model.
 _GENERIC_CLASS_MARKERS = {
@@ -179,7 +170,7 @@ class YoloService:
 
     # -- public API --------------------------------------------------------
 
-    def analyze(self, image_path: Path, seed: str, demo_requested: bool) -> AnalysisResult:
+    def analyze(self, image_path: Path) -> AnalysisResult:
         bgr = cv2.imread(str(image_path), cv2.IMREAD_COLOR)
         if bgr is None:
             return AnalysisResult(
@@ -203,9 +194,6 @@ class YoloService:
         if state.status == "ready":
             return self._run_model(bgr, width, height)
 
-        if demo_requested and self._settings.yolo_allow_demo_mode:
-            return self._simulate(bgr, width, height, seed, state)
-
         status = "model_not_configured" if state.status in {"not_configured", "weights_missing"} else (
             "model_incompatible" if state.status == "incompatible" else "model_error"
         )
@@ -216,13 +204,6 @@ class YoloService:
                 "how_to_fix": (
                     "An administrator must place custom chest X-ray YOLO weights on the "
                     "server and set YOLO_WEIGHTS_PATH (see models/README.md)."
-                ),
-                "demo_mode_available": self._settings.yolo_allow_demo_mode,
-                "demo_mode_hint": (
-                    "The user can enable 'Демо режим' in Настройки to see a simulated, "
-                    "clearly labelled placeholder result for interface testing."
-                    if self._settings.yolo_allow_demo_mode
-                    else "Demo mode is disabled on this server."
                 ),
                 "detections": [],
             },
@@ -264,11 +245,10 @@ class YoloService:
                     )
         detections.sort(key=lambda d: d["score"], reverse=True)
 
-        annotated = self._draw(bgr, detections, simulated=False)
+        annotated = self._draw(bgr, detections)
         payload = {
             "status": "success",
             "model_type": "medical_yolo",
-            "simulated": False,
             "image_size": {"width": width, "height": height},
             "score_threshold": s.yolo_conf_threshold,
             "model_classes": self._classes,
@@ -291,56 +271,17 @@ class YoloService:
         }
         return AnalysisResult(payload, annotated)
 
-    # -- simulated demo ----------------------------------------------------
-
-    def _simulate(
-        self, bgr: np.ndarray, width: int, height: int, seed: str, state: YoloStatus
-    ) -> AnalysisResult:
-        rng = random.Random(int(hashlib.sha256(seed.encode()).hexdigest()[:12], 16))
-        detections = []
-        for index in range(rng.randint(1, 2)):
-            w = int(width * rng.uniform(0.16, 0.30))
-            h = int(height * rng.uniform(0.16, 0.30))
-            x1 = rng.randint(int(width * 0.08), max(int(width * 0.08) + 1, int(width * 0.92) - w))
-            y1 = rng.randint(int(height * 0.14), max(int(height * 0.14) + 1, int(height * 0.90) - h))
-            detections.append(
-                {
-                    "class_name": f"SIMULATED_PLACEHOLDER_{index + 1}",
-                    "score": round(rng.uniform(0.30, 0.90), 2),
-                    "bbox": [x1, y1, x1 + w, y1 + h],
-                    "simulated": True,
-                }
-            )
-        annotated = self._draw(bgr, detections, simulated=True)
-        payload = {
-            "status": "simulated_demo",
-            "model_type": "simulated_demo",
-            "simulated": True,
-            "real_model_status": state.status,
-            "real_model_detail": state.detail,
-            "image_size": {"width": width, "height": height},
-            "model_classes": [],
-            "detections": detections,
-            "disclaimer": SIMULATED_DISCLAIMER,
-            "interpretation_notes": [
-                "No medical model was run. These values are random placeholders.",
-                "Do not interpret, explain or draw any medical conclusion from them.",
-                "Tell the user clearly that this is a simulation for testing the interface.",
-            ],
-        }
-        return AnalysisResult(payload, annotated)
-
     # -- drawing -----------------------------------------------------------
 
     @staticmethod
-    def _draw(bgr: np.ndarray, detections: list[dict[str, Any]], simulated: bool) -> Image.Image:
+    def _draw(bgr: np.ndarray, detections: list[dict[str, Any]]) -> Image.Image:
         image = Image.fromarray(cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB))
         draw = ImageDraw.Draw(image, "RGBA")
         width, height = image.size
         scale = max(width, height)
         stroke = max(2, scale // 300)
         font = _load_font(max(13, scale // 48))
-        colour = (245, 158, 11) if simulated else (20, 184, 166)
+        colour = (20, 184, 166)
 
         for index, det in enumerate(detections, start=1):
             x1, y1, x2, y2 = det["bbox"]
@@ -364,19 +305,6 @@ class YoloService:
             )
             draw.text((box_left + pad, box_top + pad - top), label, fill=(15, 23, 42, 255), font=font)
 
-        if simulated:
-            banner_font = _load_font(max(15, scale // 34))
-            text = "SIMULATED DEMO - NOT A REAL ANALYSIS"
-            left, top, right, bottom = draw.textbbox((0, 0), text, font=banner_font)
-            banner_h = (bottom - top) + max(16, scale // 40)
-            for y0 in (0, height - banner_h):
-                draw.rectangle([0, y0, width, y0 + banner_h], fill=(180, 83, 9, 235))
-                draw.text(
-                    ((width - (right - left)) / 2, y0 + (banner_h - (bottom - top)) / 2 - top),
-                    text,
-                    fill=(255, 255, 255, 255),
-                    font=banner_font,
-                )
         return image.convert("RGB")
 
 

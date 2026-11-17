@@ -105,12 +105,6 @@ The app works without a model. An analysis request then produces the tool
 status `model_not_configured`, and the assistant explains that no analysis was
 performed.
 
-To try the full interface anyway, enable **Настройки → Демо режим**. Demo
-results are random placeholders and are labelled as a simulation in the tool
-output and in the chat. Demo mode is unavailable when
-a real model is configured and can be turned off on the server
-(`YOLO_ALLOW_DEMO_MODE=false`).
-
 ### With YOLO weights
 
 Put custom chest X-ray **detection** weights in `models/`, set
@@ -254,7 +248,7 @@ What the build does, and why:
   in [models/README.md](models/README.md) and verifies their SHA-256, so the
   image carries exactly the checked file without committing a binary to git
   (`YOLO_WEIGHTS_URL` and `YOLO_WEIGHTS_SHA256` are build arguments; an empty
-  URL builds without a model, demo mode only);
+  URL builds without a model);
 * downloads the CLIP triage model into the image, because a Railway container's
   filesystem is wiped on every deploy and a fresh instance must not fetch
   600 MB before it can label an upload;
@@ -323,7 +317,7 @@ The frontend sends it with every request; see `backend/i18n.py`.
 
 | Endpoint | Purpose |
 |---|---|
-| `POST /api/chat` | One user turn. Body: `conversation_id`, `consent`, `demo_mode`, `history`, `message {text, attachment_ids}`. Response: Server-Sent Events — `text_delta`, `tool_start`, `tool_end`, `emergency`, `notice`, `error`, `done`. |
+| `POST /api/chat` | One user turn. Body: `conversation_id`, `consent`, `history`, `message {text, attachment_ids}`. Response: Server-Sent Events — `text_delta`, `tool_start`, `tool_end`, `emergency`, `notice`, `error`, `done`. |
 | `POST /api/upload` | Multipart `file` (image or PDF) + `conversation_id`. Returns a temporary `image_id`. |
 | `GET /api/images/{image_id}` | Original or annotated image, only for the session that owns it. |
 | `DELETE /api/conversations/{id}` | Delete a conversation's images and tool results. |
@@ -344,7 +338,7 @@ The frontend sends it with every request; see `backend/i18n.py`.
 │   │   ├── document_service.py     Reads an uploaded medical document with Claude vision
 │   │   ├── framar_service.py       Medication leaflets and interactions from framar.bg
 │   │   ├── superdoc_service.py     Doctor search on superdoc.bg listing pages
-│   │   ├── yolo_service.py         Weights checks, inference, annotation, demo
+│   │   ├── yolo_service.py         Weights checks, inference, annotation
 │   │   ├── image_triage_service.py Local CLIP triage: xray / scan / document / photo
 │   │   ├── image_service.py        Validated, session-scoped temp image store
 │   │   └── safety_service.py       Input cleaning, emergency wording, log refs

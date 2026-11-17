@@ -145,7 +145,6 @@ async def health() -> HealthResponse:
         yolo=YoloHealth(
             status=yolo.status,  # type: ignore[arg-type]
             detail=yolo.detail,
-            demo_mode_allowed=settings.yolo_allow_demo_mode,
             classes=yolo.classes,
         ),
         image_triage=ImageTriageHealth(status=triage.status, detail=triage.detail, model=triage.model),

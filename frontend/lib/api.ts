@@ -123,7 +123,6 @@ export async function deleteSession(sessionId: string) {
 export type ChatPayload = {
   conversation_id: string;
   consent: boolean;
-  demo_mode: boolean;
   history: {
     role: "user" | "assistant";
     text: string;

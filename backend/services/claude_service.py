@@ -278,7 +278,7 @@ async def stream_chat(
     registry = get_registry()
     store = get_image_store()
     conv = request.conversation_id
-    ctx = ToolContext(session_id, conv, request.demo_mode, settings, language)
+    ctx = ToolContext(session_id, conv, settings, language)
 
     # Deterministic safety net: show the 112 banner before the model answers.
     if detect_emergency(request.message.text):

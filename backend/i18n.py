@@ -200,10 +200,6 @@ MESSAGES: dict[str, dict[str, str]] = {
     },
     # --- tool cards: analyze_xray -----------------------------------------------
     "analyze_xray.success": {"bg": "AI анализът е завършен.", "en": "The AI analysis is complete."},
-    "analyze_xray.simulated_demo": {
-        "bg": "Демо симулацията е завършена. Това не е реален анализ.",
-        "en": "The demo simulation is complete. This is not a real analysis.",
-    },
     "analyze_xray.model_not_configured": {
         "bg": "Моделът на X-ray Analyzer не е конфигуриран на сървъра.",
         "en": "The X-ray Analyzer model is not configured on the server.",

@@ -42,7 +42,6 @@ class ChatRequest(BaseModel):
 
     conversation_id: str = Field(pattern=ID_PATTERN)
     consent: bool = False
-    demo_mode: bool = False
     history: list[HistoryMessage] = Field(default_factory=list, max_length=400)
     message: CurrentMessage
 
@@ -70,7 +69,6 @@ class UploadResponse(BaseModel):
 class YoloHealth(BaseModel):
     status: Literal["ready", "not_configured", "weights_missing", "incompatible", "error"]
     detail: str
-    demo_mode_allowed: bool
     classes: list[str] = Field(default_factory=list)
 
 

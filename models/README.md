@@ -67,12 +67,6 @@ The app still works. When an analysis is requested, the tool returns
 `model_not_configured` and the assistant explains that no analysis was
 performed.
 
-For interface testing there is a **demo mode** (Настройки → Демо режим). It
-draws random placeholder boxes and is labelled as a simulation in the tool
-result, on the image itself and in the chat. It can be disabled on the server
-with `YOLO_ALLOW_DEMO_MODE=false`, and it is unavailable whenever a real model
-is configured.
-
 ## Image triage model (downloaded automatically)
 
 `models/triage/` is the Hugging Face cache for the zero-shot CLIP vision

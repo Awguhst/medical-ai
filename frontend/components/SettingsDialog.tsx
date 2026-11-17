@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Check, FlaskConical, Languages, Palette, ShieldOff, Trash2, Wrench } from "lucide-react";
+import { Check, Languages, Palette, ShieldOff, Trash2, Wrench } from "lucide-react";
 
 import { useT, type MessageKey } from "@/lib/i18n";
 import { LANGUAGE_OPTIONS, THEME_OPTIONS, type ThemeOption } from "@/lib/preferences";
@@ -107,7 +107,6 @@ export default function SettingsDialog({
   const t = useT();
   const [confirming, setConfirming] = useState(false);
   const yoloReady = health?.yolo.status === "ready";
-  const demoAllowed = Boolean(health?.yolo.demo_mode_allowed) && !yoloReady;
   const triage = health?.image_triage;
 
   return (
@@ -265,41 +264,6 @@ export default function SettingsDialog({
                 {t("model_classes", { classes: health.yolo.classes.join(", ") })}
               </p>
             )}
-          </section>
-
-          <section>
-            <h3 className="eyebrow">{t("section_demo")}</h3>
-            <div
-              className={cn(
-                "mt-2 rounded-xl border p-4 transition-[border-color,background-color,box-shadow] duration-300 ease-out-quart",
-                settings.demoMode && demoAllowed
-                  ? "border-amber-200 bg-amber-50/60 shadow-[0_0_0_3px_rgb(var(--rgb-warn)/0.06)]"
-                  : "border-line bg-fill",
-              )}
-            >
-              <div className="flex items-start justify-between gap-4">
-                <label htmlFor="demo-mode" className="flex cursor-pointer items-start gap-2.5">
-                  <FlaskConical className="mt-0.5 size-4 shrink-0 text-amber-600" />
-                  <span>
-                    <span className="block text-sm font-semibold text-ink-900">{t("demo_title")}</span>
-                    <span className="mt-0.5 block text-[13px] leading-relaxed text-ink-500">
-                      {t("demo_text")}
-                    </span>
-                  </span>
-                </label>
-                <Switch
-                  id="demo-mode"
-                  checked={settings.demoMode && demoAllowed}
-                  disabled={!demoAllowed}
-                  onCheckedChange={(demoMode) => onSettingsChange({ ...settings, demoMode })}
-                />
-              </div>
-              {!demoAllowed && health && (
-                <p className="mt-2.5 text-[12px] text-ink-500">
-                  {yoloReady ? t("demo_unavailable_real") : t("demo_unavailable_server")}
-                </p>
-              )}
-            </div>
           </section>
 
           <section>

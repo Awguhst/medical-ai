@@ -38,7 +38,6 @@ class ToolContext:
 
     session_id: str
     conversation_id: str
-    demo_mode: bool
     settings: Settings
     language: str = DEFAULT_LANGUAGE  # of the interface; selects the user-facing texts
 
@@ -227,9 +226,7 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
         )
 
     # 3-6. Weights check, inference and drawing run off the event loop.
-    result = await asyncio.to_thread(
-        get_yolo_service().analyze, record.path, record.image_id, ctx.demo_mode
-    )
+    result = await asyncio.to_thread(get_yolo_service().analyze, record.path)
 
     payload = {"image_id": record.image_id, "triage": triage, **result.payload}
     status = payload["status"]
@@ -245,7 +242,6 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
         "message": _ui_message(ctx.language, "analyze_xray", status, "error"),
         "image_id": record.image_id,
         "annotated_image_id": annotated_id,
-        "simulated": bool(payload.get("simulated")),
         "model_type": payload.get("model_type"),
         "model_classes": payload.get("model_classes", []),
         "score_threshold": payload.get("score_threshold"),
@@ -537,8 +533,7 @@ def build_registry() -> ToolRegistry:
                 "checks for itself and returns `unsupported_image` for anything that is not "
                 "a radiograph. Pass the image_id "
                 "exactly as it appears in the attachment metadata. The result's "
-                "`status` field says whether a real model ran (`success`), whether the "
-                "output is a labelled simulation (`simulated_demo`), or why no analysis "
+                "`status` field says whether the model ran (`success`) or why no analysis "
                 "was possible (`model_not_configured`, `model_incompatible`, "
                 "`unsupported_image`, `image_not_found`)."
             ),
@@ -573,6 +568,6 @@ def get_registry() -> ToolRegistry:
 
 
 def default_context(
-    session_id: str, conversation_id: str, demo_mode: bool, language: str = DEFAULT_LANGUAGE
+    session_id: str, conversation_id: str, language: str = DEFAULT_LANGUAGE
 ) -> ToolContext:
-    return ToolContext(session_id, conversation_id, demo_mode, get_settings(), language)
+    return ToolContext(session_id, conversation_id, get_settings(), language)

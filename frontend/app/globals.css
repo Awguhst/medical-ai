@@ -50,7 +50,7 @@
   --color-ink-500: #8f8f8f;
   --color-ink-400: #6b6b6b;
 
-  /* Status tints: amber = warning and demo, red = danger, teal = success,
+  /* Status tints: amber = warning, red = danger, teal = success,
      slate = neutral grey (toggle tracks, idle dots). */
   --color-amber-50: #1f1809;
   --color-amber-100: #2b210b;

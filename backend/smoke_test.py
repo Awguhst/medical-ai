@@ -4,7 +4,7 @@
     python smoke_test.py
 
 Covers: upload validation, session isolation, path-traversal handling, the
-tool registry, the YOLO guard rails (not configured / demo / non-X-ray), and
+tool registry, the YOLO guard rails (not configured / non-X-ray), and
 the Claude tool-use loop (with a scripted stand-in for the Anthropic client,
 so that message and tool_result ordering can be asserted exactly).
 """
@@ -24,7 +24,6 @@ from types import SimpleNamespace
 os.environ["ANTHROPIC_API_KEY"] = "test-key-not-real"
 os.environ["ANTHROPIC_MODEL"] = "claude-opus-5-5"
 os.environ["YOLO_WEIGHTS_PATH"] = "./models/does_not_exist.pt"
-os.environ["YOLO_ALLOW_DEMO_MODE"] = "true"
 os.environ["MAX_TOOL_ITERATIONS"] = "2"
 os.environ["IMAGE_TRIAGE_ENABLED"] = "false"  # no model download during checks
 
@@ -42,6 +41,7 @@ from PIL import Image  # noqa: E402
 
 import services.claude_service as claude_service  # noqa: E402
 from main import app  # noqa: E402
+from services.image_service import get_image_store  # noqa: E402
 from services.safety_service import detect_emergency, sanitize_filename  # noqa: E402
 from services.tool_registry import default_context, get_registry  # noqa: E402
 from prompts.medical_system_prompt import MEDICAL_SYSTEM_PROMPT  # noqa: E402
@@ -368,7 +368,7 @@ def install_fake(script) -> FakeMessages:
     return messages
 
 
-def chat(client: TestClient, text: str, attachment_ids=(), history=(), demo=False, consent=True,
+def chat(client: TestClient, text: str, attachment_ids=(), history=(), consent=True,
          session: str = SESSION_A, language: str | None = None):
     headers = {"X-Session-Id": session}
     if language:
@@ -378,7 +378,6 @@ def chat(client: TestClient, text: str, attachment_ids=(), history=(), demo=Fals
         json={
             "conversation_id": CONV,
             "consent": consent,
-            "demo_mode": demo,
             "history": list(history),
             "message": {"text": text, "attachment_ids": list(attachment_ids)},
         },
@@ -440,7 +439,7 @@ def main() -> None:
 
         print("tool registry")
         registry = get_registry()
-        ctx = default_context(SESSION_A, CONV, demo_mode=False)
+        ctx = default_context(SESSION_A, CONV)
         run = lambda name, data, c=ctx: asyncio.run(registry.execute(name, data, c))  # noqa: E731
 
         out = run("run_shell", {"cmd": "whoami"})
@@ -449,10 +448,10 @@ def main() -> None:
         check(out.is_error and out.payload["error"] == "invalid_input", "invalid tool input is refused")
         out = run("analyze_xray", {"image_id": "img_doesnotexist123"})
         check(out.payload["status"] == "image_not_found", "unknown image id is refused")
-        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_B, CONV, False))
+        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_B, CONV))
         check(out.payload["status"] == "image_not_found", "image from another session is refused")
         out = run("analyze_xray", {"image_id": xray_id},
-                  default_context(SESSION_A, "conversation-other", False))
+                  default_context(SESSION_A, "conversation-other"))
         check(out.payload["status"] == "image_not_found", "image from another conversation is refused")
 
         out = run("analyze_xray", {"image_id": xray_id})
@@ -460,18 +459,15 @@ def main() -> None:
         check(out.payload["detections"] == [] and "annotated_image_id" not in out.payload,
               "no detections are produced without a model")
 
-        out = run("analyze_xray", {"image_id": photo_id}, default_context(SESSION_A, CONV, True))
+        out = run("analyze_xray", {"image_id": photo_id})
         check(out.payload["status"] == "unsupported_image",
-              "coloured non-X-ray image is not analysed (even in demo mode)")
+              "coloured non-X-ray image is not analysed")
 
-        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_A, CONV, True))
-        check(out.payload["status"] == "simulated_demo" and out.payload["simulated"] is True,
-              "demo mode result is flagged as simulated")
-        check(all(d.get("simulated") for d in out.payload["detections"]),
-              "every demo detection is flagged as simulated")
-        check(out.ui["simulated"] is True and "SIMULATED" in out.payload["disclaimer"],
-              "demo labelling reaches both UI and model payloads")
-        annotated = out.payload["annotated_image_id"]
+        # No model, so no annotated image comes out of the tool; store one the
+        # way the tool would to check who may fetch it.
+        store = get_image_store()
+        source = store.get(xray_id, SESSION_A, CONV, kind="upload")
+        annotated = store.store_annotated(Image.new("RGB", (64, 64), "black"), source).image_id
         check(client.get(f"/api/images/{annotated}", headers=hdr_a).status_code == 200,
               "annotated image is served to the owner")
         check(client.get(f"/api/images/{annotated}", headers=hdr_b).status_code == 404,
@@ -560,7 +556,7 @@ def main() -> None:
         check(len(system) == 2 and system[0]["text"] == MEDICAL_SYSTEM_PROMPT and "cache_control" in system[0]
               and "Interface language: English" in system[1]["text"] and "cache_control" not in system[1],
               "an English interface adds a second system block after the cached prompt")
-        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_A, CONV, False, "en"))
+        out = run("analyze_xray", {"image_id": xray_id}, default_context(SESSION_A, CONV, "en"))
         check(out.ui["message"] == "The X-ray Analyzer model is not configured on the server."
               and out.payload["status"] == "model_not_configured",
               "tool results carry the translated status line; the model payload is unchanged")
@@ -869,7 +865,7 @@ def main() -> None:
         check(out.payload["status"] == "success" and fake.calls[1]["tool_choice"] == {"type": "auto"},
               "if a forced tool call is rejected, the reader retries without forcing")
 
-        other = default_context(SESSION_B, CONV, False)
+        other = default_context(SESSION_B, CONV)
         out = asyncio.run(registry.execute("read_document", {"image_id": pdf_id}, other))
         check(out.payload["status"] == "document_not_found", "another session cannot have a file read")
         out = run("read_document", {"image_id": "../../etc/passwd"})
