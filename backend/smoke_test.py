@@ -911,6 +911,13 @@ def main() -> None:
           and tr("xx", "empty_message") == "Съобщението е празно.",
           "messages are formatted and fall back to Bulgarian")
 
+    print("system prompt")
+    check("\u2014" not in MEDICAL_SYSTEM_PROMPT and "\u2013" not in MEDICAL_SYSTEM_PROMPT,
+          "the prompt keeps its own no-long-dash rule")
+    check("# When to send someone to a doctor" in MEDICAL_SYSTEM_PROMPT
+          and "4. Conclude." in MEDICAL_SYSTEM_PROMPT,
+          "the prompt carries the conclusion step and the doctor-visit criteria")
+
     print(f"\nAll {PASSED} checks passed.")
 
 
