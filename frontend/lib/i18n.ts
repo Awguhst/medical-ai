@@ -76,7 +76,7 @@ const bg = {
   stop_reply: "Спри отговора",
   stop: "Спри",
   send: "Изпрати",
-  send_hint: "Изпрати (Enter)",
+  send_hint: "Изпрати (Ctrl+Enter)",
 
   // --- messages (ChatMessage) -------------------------------------------------
   typing: "MedAI пише",
@@ -336,7 +336,7 @@ const en: Record<MessageKey, string> = {
   stop_reply: "Stop the reply",
   stop: "Stop",
   send: "Send",
-  send_hint: "Send (Enter)",
+  send_hint: "Send (Ctrl+Enter)",
 
   typing: "MedAI is typing",
   emergency_title: "Possible emergency",

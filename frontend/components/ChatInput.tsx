@@ -278,7 +278,8 @@ export default function ChatInput({
           maxLength={6000}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
+            // Enter inserts a newline; Ctrl+Enter (Cmd+Enter on Mac) sends.
+            if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
               e.preventDefault();
               submit();
             }
