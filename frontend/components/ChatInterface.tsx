@@ -69,6 +69,9 @@ import SettingsDialog from "@/components/SettingsDialog";
 import Sidebar, { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 
+/** One stable empty list, so an empty conversation does not look changed on every render. */
+const NO_MESSAGES: Message[] = [];
+
 const SUGGESTIONS: { icon: LucideIcon; key: MessageKey }[] = [
   { icon: Activity, key: "suggestion_1" },
   { icon: Brain, key: "suggestion_2" },
@@ -178,6 +181,11 @@ export default function ChatInterface() {
   const [consentOpen, setConsentOpen] = useState(false);
   const [streamingId, setStreamingId] = useState<string | null>(null); // conversation id
   const [atBottom, setAtBottom] = useState(true);
+  const atBottomRef = useRef(true); // the same, for effects that must not re-run on scroll
+  const markAtBottom = useCallback((value: boolean) => {
+    atBottomRef.current = value;
+    setAtBottom(value);
+  }, []);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -260,7 +268,7 @@ export default function ChatInterface() {
     () => conversations.find((c) => c.id === activeId),
     [conversations, activeId],
   );
-  const messages = active?.messages ?? [];
+  const messages = active?.messages ?? NO_MESSAGES;
   const busy = streamingId !== null;
 
   // --- scrolling ----------------------------------------------------------
@@ -269,15 +277,21 @@ export default function ChatInterface() {
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: smooth ? "smooth" : "auto" });
   }, []);
 
+  // A newly opened conversation is read from its end. Declared before the
+  // effect below, which sees the reset in the same commit.
   useEffect(() => {
-    // The welcome screen (no messages) always starts at the top.
-    if (messages.length === 0) scrollRef.current?.scrollTo({ top: 0 });
-    else if (atBottom) scrollToBottom();
-  }, [messages, atBottom, scrollToBottom]);
+    markAtBottom(true);
+  }, [activeId, markAtBottom]);
 
+  // Keep the end in view while new content arrives, unless the reader has
+  // scrolled up. The welcome screen (no messages) starts at the top. The scroll
+  // position is read through the ref on purpose: as a dependency, each change
+  // of it re-ran this effect, and on a phone, where the welcome screen is
+  // taller than the viewport, every scroll snapped straight back to the top.
   useEffect(() => {
-    setAtBottom(true);
-  }, [activeId]);
+    if (messages.length === 0) scrollRef.current?.scrollTo({ top: 0 });
+    else if (atBottomRef.current) scrollToBottom();
+  }, [messages, scrollToBottom]);
 
   // --- conversation helpers ----------------------------------------------
   const patchMessage = useCallback(
@@ -335,7 +349,7 @@ export default function ChatInterface() {
           },
         ];
       });
-      setAtBottom(true);
+      markAtBottom(true);
       setStreamingId(conversationId);
 
       const controller = new AbortController();
@@ -377,7 +391,7 @@ export default function ChatInterface() {
         setStreamingId(null);
       }
     },
-    [patchMessage, refreshHealth, sessionId, t],
+    [markAtBottom, patchMessage, refreshHealth, sessionId, t],
   );
 
   const send = useCallback(
@@ -551,7 +565,7 @@ export default function ChatInterface() {
               ref={scrollRef}
               onScroll={(e) => {
                 const el = e.currentTarget;
-                setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
+                markAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 80);
               }}
               className="scroll-quiet min-h-0 flex-1 overflow-y-auto"
             >
@@ -625,7 +639,7 @@ export default function ChatInterface() {
               <button
                 type="button"
                 onClick={() => {
-                  setAtBottom(true);
+                  markAtBottom(true);
                   scrollToBottom(true);
                 }}
                 className={cn(
