@@ -29,7 +29,7 @@ const bg = {
   claude_unconfigured_3: "и рестартирайте сървъра.",
   welcome_heading: "С какво мога да помогна?",
   welcome_text:
-    "Здравейте! Аз съм MedAI, вашият AI медицински асистент. Можете да ме попитате за симптоми, заболявания, да прикачите рентгенова снимка или друго медицинско изображение, което да разгледам, или медицински документ, който да ви обясня.",
+    "Здравейте! Аз съм MedAI, вашият медицински асистент. Попитайте за симптом или заболяване, или прикачете снимка или медицински документ.",
   suggestion_1: "Какви са симптомите на пневмония?",
   suggestion_2: "Имам главоболие от няколко дни.",
   suggestion_3: "Какво означава високо кръвно налягане?",
@@ -276,7 +276,7 @@ const en: Record<MessageKey, string> = {
   claude_unconfigured_3: "file and restart the server.",
   welcome_heading: "How can I help?",
   welcome_text:
-    "Hello! I am MedAI, your AI medical assistant. You can ask me about symptoms and conditions, attach an X-ray or another medical image for me to look at, or a medical document for me to explain.",
+    "Hello! I am MedAI, your medical assistant. Ask about a symptom or a condition, or attach an image or a medical document.",
   suggestion_1: "What are the symptoms of pneumonia?",
   suggestion_2: "I have had a headache for a few days.",
   suggestion_3: "What does high blood pressure mean?",
