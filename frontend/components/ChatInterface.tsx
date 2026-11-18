@@ -51,6 +51,7 @@ import {
   saveConversations,
   saveSettings,
 } from "@/lib/storage";
+import { ROOT, siblingsIn, threadOf, withBranch } from "@/lib/thread";
 import type {
   Attachment,
   ChatEvent,
@@ -69,8 +70,9 @@ import SettingsDialog from "@/components/SettingsDialog";
 import Sidebar, { SIDEBAR_DEFAULT, SIDEBAR_MAX, SIDEBAR_MIN } from "@/components/Sidebar";
 import { Button } from "@/components/ui/button";
 
-/** One stable empty list, so an empty conversation does not look changed on every render. */
+/** Stable empties, so an empty conversation does not look changed on every render. */
 const NO_MESSAGES: Message[] = [];
+const NO_SIBLINGS = new Map<string, string[]>();
 
 const SUGGESTIONS: { icon: LucideIcon; key: MessageKey }[] = [
   { icon: Activity, key: "suggestion_1" },
@@ -83,6 +85,12 @@ function titleFrom(text: string, attachments: Attachment[], t: Translate): strin
   const clean = text.replace(/\s+/g, " ").trim();
   if (!clean) return attachments.length ? t("attached_file") : t("new_conversation");
   return clean.length > 42 ? `${clean.slice(0, 42).trimEnd()}…` : clean;
+}
+
+/** The thread on display in conversation `id`, read from a state snapshot. */
+function threadIn(list: Conversation[], id: string): Message[] {
+  const conversation = list.find((c) => c.id === id);
+  return conversation ? threadOf(conversation) : [];
 }
 
 function toHistory(messages: Message[]): ChatPayload["history"] {
@@ -268,7 +276,12 @@ export default function ChatInterface() {
     () => conversations.find((c) => c.id === activeId),
     [conversations, activeId],
   );
-  const messages = active?.messages ?? NO_MESSAGES;
+  // On display: one path through the conversation's branches.
+  const messages = useMemo(() => (active ? threadOf(active) : NO_MESSAGES), [active]);
+  const siblings = useMemo(
+    () => (active ? siblingsIn(active, messages) : NO_SIBLINGS),
+    [active, messages],
+  );
   const busy = streamingId !== null;
 
   // --- scrolling ----------------------------------------------------------
@@ -311,30 +324,49 @@ export default function ChatInterface() {
     [],
   );
 
+  /**
+   * Ask `text` after the messages in `prior` and stream the reply. The question
+   * becomes a child of the last message in `prior`, next to any question asked
+   * there before: that is how an edit forks the conversation. With `questionId`
+   * an existing question is asked again and only the reply is new.
+   */
   const runTurn = useCallback(
-    async (conversationId: string, text: string, attachments: Attachment[], prior: Message[]) => {
+    async (
+      conversationId: string,
+      text: string,
+      attachments: Attachment[],
+      prior: Message[],
+      questionId?: string,
+    ) => {
       const now = Date.now();
-      const userMessage: Message = {
-        id: newId(),
-        role: "user",
-        createdAt: now,
-        text,
-        attachments,
-      };
+      const parent = prior[prior.length - 1]?.id ?? null;
+      const question = questionId ?? newId();
+      const userMessage: Message | undefined = questionId
+        ? undefined
+        : { id: question, role: "user", createdAt: now, text, attachments, parentId: parent };
       const assistantMessage: Message = {
         id: newId(),
         role: "assistant",
         createdAt: now + 1,
         parts: [],
         pending: true,
+        parentId: question,
       };
+      const added = userMessage ? [userMessage, assistantMessage] : [assistantMessage];
+      // Put the question and its reply on display at their forks.
+      const chosen = { [parent ?? ROOT]: question, [question]: assistantMessage.id };
 
       setConversations((list) => {
         const existing = list.find((c) => c.id === conversationId);
         if (existing) {
           return list.map((c) =>
             c.id === conversationId
-              ? { ...c, updatedAt: now, messages: [...prior, userMessage, assistantMessage] }
+              ? {
+                  ...c,
+                  updatedAt: now,
+                  messages: [...c.messages, ...added],
+                  branches: { ...c.branches, ...chosen },
+                }
               : c,
           );
         }
@@ -345,7 +377,8 @@ export default function ChatInterface() {
             title: titleFrom(text, attachments, t),
             createdAt: now,
             updatedAt: now,
-            messages: [userMessage, assistantMessage],
+            messages: added,
+            branches: chosen,
           },
         ];
       });
@@ -402,20 +435,67 @@ export default function ChatInterface() {
         setConsentOpen(true);
         return;
       }
-      const prior = conversationsRef.current.find((c) => c.id === activeId)?.messages ?? [];
-      void runTurn(activeId, text, attachments, prior);
+      void runTurn(activeId, text, attachments, threadIn(conversationsRef.current, activeId));
     },
     [activeId, busy, consent, runTurn],
   );
 
-  const retry = useCallback(() => {
-    if (busy) return;
-    const all = conversationsRef.current.find((c) => c.id === activeId)?.messages ?? [];
-    const failed = all[all.length - 1];
-    const question = all[all.length - 2];
-    if (!failed || failed.role !== "assistant" || !question || question.role !== "user") return;
-    void runTurn(activeId, question.text ?? "", question.attachments ?? [], all.slice(0, -2));
-  }, [activeId, busy, runTurn]);
+  /** Send a rewritten question in place of `messageId`: a new branch from that point. */
+  const editMessage = useCallback(
+    (messageId: string, text: string) => {
+      if (busy || !activeId) return;
+      if (!consent) {
+        setConsentOpen(true);
+        return;
+      }
+      const thread = threadIn(conversationsRef.current, activeId);
+      const index = thread.findIndex((m) => m.id === messageId);
+      if (index < 0 || thread[index].role !== "user") return;
+      void runTurn(activeId, text, thread[index].attachments ?? [], thread.slice(0, index));
+    },
+    [activeId, busy, consent, runTurn],
+  );
+
+  /** Ask the question before reply `messageId` again. A failed reply is replaced, a finished one gets an alternative. */
+  const regenerate = useCallback(
+    (messageId: string) => {
+      if (busy || !activeId) return;
+      if (!consent) {
+        setConsentOpen(true);
+        return;
+      }
+      const thread = threadIn(conversationsRef.current, activeId);
+      const index = thread.findIndex((m) => m.id === messageId);
+      const reply = thread[index];
+      const question = thread[index - 1];
+      if (!reply || reply.role !== "assistant" || !question || question.role !== "user") return;
+      if (reply.error) {
+        setConversations((list) =>
+          list.map((c) =>
+            c.id === activeId ? { ...c, messages: c.messages.filter((m) => m.id !== messageId) } : c,
+          ),
+        );
+      }
+      void runTurn(
+        activeId,
+        question.text ?? "",
+        question.attachments ?? [],
+        thread.slice(0, index - 1),
+        question.id,
+      );
+    },
+    [activeId, busy, consent, runTurn],
+  );
+
+  /** Show another alternative at one fork of the active conversation. */
+  const selectBranch = useCallback(
+    (parent: string, childId: string) => {
+      setConversations((list) =>
+        list.map((c) => (c.id === activeId ? withBranch(c, parent, childId) : c)),
+      );
+    },
+    [activeId],
+  );
 
   const stop = useCallback(() => abortRef.current?.abort(), []);
 
@@ -451,8 +531,7 @@ export default function ChatInterface() {
     const queued = pendingSendRef.current;
     pendingSendRef.current = null;
     if (queued && activeId) {
-      const prior = conversationsRef.current.find((c) => c.id === activeId)?.messages ?? [];
-      void runTurn(activeId, queued.text, queued.attachments, prior);
+      void runTurn(activeId, queued.text, queued.attachments, threadIn(conversationsRef.current, activeId));
     }
   }, [activeId, runTurn]);
 
@@ -624,7 +703,10 @@ export default function ChatInterface() {
                       key={m.id}
                       message={m}
                       showTools={settings.showToolActivity}
-                      onRetry={m === lastMessage && m.error && !busy ? retry : undefined}
+                      siblings={siblings.get(m.id)}
+                      onEdit={busy ? undefined : editMessage}
+                      onRegenerate={m === lastMessage && !busy ? regenerate : undefined}
+                      onSelectBranch={selectBranch}
                     />
                   ))}
                 </div>

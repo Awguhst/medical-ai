@@ -7,6 +7,7 @@ import {
   loadPreference,
   savePreference,
 } from "./preferences";
+import { withParents } from "./thread";
 import type { Conversation, Settings } from "./types";
 import { newId } from "./utils";
 
@@ -60,7 +61,7 @@ export function loadConversations(): Conversation[] {
   // A reload interrupts any stream that was in flight.
   return list.map((c) => ({
     ...c,
-    messages: c.messages.map((m) =>
+    messages: withParents(c.messages).map((m) =>
       m.pending
         ? {
             ...m,

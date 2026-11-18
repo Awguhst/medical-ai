@@ -92,7 +92,12 @@ backend serves the frontend itself, so neither setting is needed there.
    drag-and-drop and paste also work). The server recognises it as an X-ray
    and the assistant runs the analysis straight away; a short note such as
    „това е на гърдите ми“ is enough.
-4. **Настройки / Settings** holds the interface language (Bulgarian or
+4. The pencil under one of your messages (on hover with a mouse, always on a
+   touch screen) rewrites it. The rewritten message is sent again as a new
+   branch of the conversation; the earlier version and its reply stay
+   available through the 1/2 arrows under the message. **Regenerate** under
+   the last reply does the same for the answer.
+5. **Настройки / Settings** holds the interface language (Bulgarian or
    English; the assistant answers in it, and so do the API's messages and
    tool cards) and the colour theme: **Graphite** (neutral black, blue
    accent), **Ember** (warm brown-black, copper accent) or **Dusk** (deep

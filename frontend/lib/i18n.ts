@@ -85,6 +85,12 @@ const bg = {
   attached_image_alt: "Прикачено изображение: {name}",
   reply_stopped: "Отговорът беше спрян.",
   retry: "Опитай отново",
+  regenerate: "Генерирай отново",
+  edit_message: "Редактирай съобщението",
+  edit_hint: "Изпраща се като нов вариант на разговора. Предишният остава достъпен със стрелките.",
+  branch_label: "Вариант {index} от {count}",
+  branch_previous: "Предишен вариант",
+  branch_next: "Следващ вариант",
 
   // --- consent dialog -----------------------------------------------------------
   consent_title: "Преди да започнете",
@@ -331,6 +337,12 @@ const en: Record<MessageKey, string> = {
   attached_image_alt: "Attached image: {name}",
   reply_stopped: "The reply was stopped.",
   retry: "Try again",
+  regenerate: "Regenerate",
+  edit_message: "Edit message",
+  edit_hint: "Sent as a new version of the conversation. The previous one stays available through the arrows.",
+  branch_label: "Version {index} of {count}",
+  branch_previous: "Previous version",
+  branch_next: "Next version",
 
   consent_title: "Before you start",
   consent_description: "Please read how MedAI handles health information.",

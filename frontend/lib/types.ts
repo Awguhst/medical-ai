@@ -120,6 +120,12 @@ export type ChatMessage = {
   emergency?: boolean;
   notice?: string;
   error?: string;
+  /**
+   * The message this one follows; null at the start of the conversation.
+   * Editing a question adds a sibling under the same parent, which forks the
+   * conversation. Absent on messages stored before branching existed.
+   */
+  parentId?: string | null;
 };
 
 export type Conversation = {
@@ -127,7 +133,10 @@ export type Conversation = {
   title: string;
   createdAt: number;
   updatedAt: number;
+  /** Every message of every branch; lib/thread.ts picks the path on display. */
   messages: ChatMessage[];
+  /** At each fork, the child on display, keyed by the parent id ("" for the start). Missing: the newest child. */
+  branches?: Record<string, string>;
 };
 
 /** Interface language. Also sent to the API, which answers (and has Claude reply) in it. */

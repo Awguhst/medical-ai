@@ -1,12 +1,24 @@
 "use client";
 
-import { memo } from "react";
+import { memo, useEffect, useRef, useState, type KeyboardEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { CircleAlert, FileText, Info, Phone, RotateCcw } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  CircleAlert,
+  FileText,
+  Info,
+  Pencil,
+  Phone,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 
 import { useT } from "@/lib/i18n";
+import { parentKey } from "@/lib/thread";
 import type { ChatMessage as Message } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { LogoMark } from "@/components/Logo";
 import ImageAttachment from "@/components/ImageAttachment";
 import ToolResult from "@/components/ToolResult";
@@ -77,20 +89,158 @@ function Markdown({ text }: { text: string }) {
   );
 }
 
+const SMALL_BUTTON =
+  "focus-ring flex h-6 min-w-6 shrink-0 items-center justify-center rounded-md text-ink-500 transition-[background-color,color,opacity] duration-200 hover:bg-fill-hover hover:text-ink-900 disabled:pointer-events-none disabled:opacity-35";
+
+/** "2/3" with arrows: the alternatives at one point of the conversation. */
+function BranchNav({
+  message,
+  siblings,
+  onSelect,
+}: {
+  message: Message;
+  siblings: string[];
+  onSelect: (parent: string, childId: string) => void;
+}) {
+  const t = useT();
+  const index = siblings.indexOf(message.id);
+  const count = siblings.length;
+  const go = (step: number) => {
+    const target = siblings[index + step];
+    if (target) onSelect(parentKey(message), target);
+  };
+  return (
+    <div
+      className="flex items-center text-[12px] font-medium tabular-nums text-ink-500"
+      role="group"
+      aria-label={t("branch_label", { index: index + 1, count })}
+    >
+      <button
+        type="button"
+        onClick={() => go(-1)}
+        disabled={index <= 0}
+        className={SMALL_BUTTON}
+        aria-label={t("branch_previous")}
+        title={t("branch_previous")}
+      >
+        <ChevronLeft className="size-3.5" />
+      </button>
+      <span className="px-0.5" aria-hidden>
+        {index + 1}/{count}
+      </span>
+      <button
+        type="button"
+        onClick={() => go(1)}
+        disabled={index >= count - 1}
+        className={SMALL_BUTTON}
+        aria-label={t("branch_next")}
+        title={t("branch_next")}
+      >
+        <ChevronRight className="size-3.5" />
+      </button>
+    </div>
+  );
+}
+
+/** A question being rewritten, in place of its bubble. */
+function EditForm({
+  initial,
+  allowEmpty,
+  canSend,
+  onCancel,
+  onSend,
+}: {
+  initial: string;
+  allowEmpty: boolean;
+  canSend: boolean;
+  onCancel: () => void;
+  onSend: (text: string) => void;
+}) {
+  const t = useT();
+  const [text, setText] = useState(initial);
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.focus();
+    el.setSelectionRange(el.value.length, el.value.length);
+  }, []);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 320)}px`;
+  }, [text]);
+
+  const ready = canSend && (text.trim().length > 0 || allowEmpty);
+  const submit = () => {
+    if (ready) onSend(text.trim());
+  };
+  const onKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Escape") {
+      e.preventDefault();
+      onCancel();
+    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      submit();
+    }
+  };
+
+  return (
+    <div className="fx-bubble w-full rounded-2xl rounded-br-md border border-line-strong p-2">
+      <textarea
+        ref={ref}
+        value={text}
+        rows={1}
+        maxLength={6000}
+        onChange={(e) => setText(e.target.value)}
+        onKeyDown={onKeyDown}
+        aria-label={t("edit_message")}
+        className="scroll-quiet block w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-ink-900 outline-none"
+      />
+      <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-2 px-1 pb-0.5">
+        <span className="mr-auto text-[12px] leading-snug text-ink-400">{t("edit_hint")}</span>
+        <Button variant="ghost" size="sm" onClick={onCancel}>
+          {t("cancel")}
+        </Button>
+        <Button size="sm" onClick={submit} disabled={!ready} title={t("send_hint")}>
+          {t("send")}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 type Props = {
   message: Message;
-  onRetry?: () => void;
+  /** Ids of this message and its alternatives at the same point, oldest first; absent when it has none */
+  siblings?: string[];
+  /** Rewrite a question (absent while a reply is streaming) */
+  onEdit?: (messageId: string, text: string) => void;
+  /** Ask the question before this reply again (offered on the last reply only) */
+  onRegenerate?: (messageId: string) => void;
+  onSelectBranch?: (parent: string, childId: string) => void;
   /** Render the tool cards; off by default so the chat reads like a plain reply */
   showTools?: boolean;
 };
 
-function ChatMessageView({ message, onRetry, showTools = false }: Props) {
+function ChatMessageView({
+  message,
+  siblings,
+  onEdit,
+  onRegenerate,
+  onSelectBranch,
+  showTools = false,
+}: Props) {
   const t = useT();
+  const [editing, setEditing] = useState(false);
 
   if (message.role === "user") {
     const attachments = message.attachments ?? [];
     return (
-      <div className="flex animate-rise flex-col items-end gap-2">
+      <div className="group flex animate-rise flex-col items-end gap-2">
         {attachments.length > 0 && (
           <div className="flex max-w-[85%] flex-wrap justify-end gap-2">
             {attachments.map((a) =>
@@ -126,10 +276,48 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
             )}
           </div>
         )}
-        {message.text && (
-          <div className="fx-bubble max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] leading-relaxed text-ink-900">
-            {message.text}
-          </div>
+
+        {editing ? (
+          <EditForm
+            initial={message.text ?? ""}
+            allowEmpty={attachments.length > 0}
+            canSend={Boolean(onEdit)}
+            onCancel={() => setEditing(false)}
+            onSend={(text) => {
+              setEditing(false);
+              onEdit?.(message.id, text);
+            }}
+          />
+        ) : (
+          <>
+            {message.text && (
+              <div className="fx-bubble max-w-[85%] whitespace-pre-wrap break-words rounded-2xl rounded-br-md px-4 py-2.5 text-[15px] leading-relaxed text-ink-900">
+                {message.text}
+              </div>
+            )}
+            {(siblings || onEdit) && (
+              <div className="-mt-0.5 flex items-center gap-1">
+                {siblings && onSelectBranch && (
+                  <BranchNav message={message} siblings={siblings} onSelect={onSelectBranch} />
+                )}
+                {onEdit && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className={cn(
+                      SMALL_BUTTON,
+                      // With a mouse the pencil shows on hover; on a touch screen it stays visible.
+                      "pointer-fine:opacity-0 pointer-fine:group-hover:opacity-100 pointer-fine:group-focus-within:opacity-100",
+                    )}
+                    aria-label={t("edit_message")}
+                    title={t("edit_message")}
+                  >
+                    <Pencil className="size-3.5" />
+                  </button>
+                )}
+              </div>
+            )}
+          </>
         )}
       </div>
     );
@@ -143,6 +331,8 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
   const waitingForText =
     message.pending &&
     (!hasContent || (lastPart?.type === "tool" && (lastPart.state === "done" || !showTools)));
+  const canRegenerate = Boolean(onRegenerate) && !message.pending && !message.error;
+  const footer = !message.pending && (siblings || canRegenerate);
 
   return (
     <div className="flex animate-rise gap-3 @2xl:gap-4">
@@ -182,11 +372,30 @@ function ChatMessageView({ message, onRetry, showTools = false }: Props) {
           >
             <CircleAlert className="size-4 shrink-0" />
             <span className="min-w-0 flex-1">{message.error}</span>
-            {onRetry && (
-              <Button variant="destructive" size="sm" onClick={onRetry}>
+            {onRegenerate && (
+              <Button variant="destructive" size="sm" onClick={() => onRegenerate(message.id)}>
                 <RotateCcw className="size-3.5" />
                 {t("retry")}
               </Button>
+            )}
+          </div>
+        )}
+
+        {footer && (
+          <div className="flex items-center gap-1">
+            {siblings && onSelectBranch && (
+              <BranchNav message={message} siblings={siblings} onSelect={onSelectBranch} />
+            )}
+            {canRegenerate && (
+              <button
+                type="button"
+                onClick={() => onRegenerate?.(message.id)}
+                className={cn(SMALL_BUTTON, "gap-1.5 px-2 text-[12px] font-medium")}
+                title={t("regenerate")}
+              >
+                <RefreshCw className="size-3.5" />
+                {t("regenerate")}
+              </button>
             )}
           </div>
         )}
