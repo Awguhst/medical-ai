@@ -1,8 +1,9 @@
 # MedAI Bulgaria (МедAI)
 
 A Bulgarian AI medical information chatbot. One chat interface, powered by the
-Claude API, that can call a **locally hosted YOLO model as a tool** to analyse
-chest X-ray images the user attaches to the conversation.
+Claude API, that can look at an X-ray, a scan or a photo the user attaches
+through a **separate Claude vision reader used as a tool**, and read medical
+documents the same way.
 
 > **Prototype.** MedAI gives general, educational health information. It is not
 > a medical device, does not diagnose, and is not certified for clinical use.
@@ -14,34 +15,39 @@ chest X-ray images the user attaches to the conversation.
 Browser (Next.js)  ──►  FastAPI backend  ──►  Claude API (text + tool calls)
                               │   ▲
             tool call         ▼   │  structured result
-                        analyze_xray ──► local YOLO model (image never leaves the server)
+                        analyze_image ──► Claude vision (a separate request with the picture)
 ```
 
 * The user chats in Bulgarian or English (a setting; the assistant replies in
-  the chosen language) and may attach an X-ray or a medical document. There
-  is no separate "analyse" button or page.
-* Claude receives the text plus **attachment metadata only** (an `image_id`,
-  file name, size) — never the file itself. The one exception is the document
-  reader, which sends a document the user asks to be read in a separate
-  request (see "Reading medical documents").
+  the chosen language) and may attach a medical image or a medical document.
+  There is no separate "analyse" button or page.
+* The chat model receives the text plus **attachment metadata only** (an
+  `image_id`, file name, size) — never the file itself. The two tools that
+  look at a file, `analyze_image` and `read_document`, each send it in a
+  separate request whose only job is to turn it into structured data.
 * On upload, a local zero-shot CLIP vision transformer labels the image as
   `xray`, `scan`, `document` or `photo`. The label travels with the attachment
-  metadata; for an X-ray the backend runs `analyze_xray` itself before Claude
-  answers, so the user does not have to ask, and for a document the label
-  tells Claude to call the reader.
-* Claude calls `analyze_xray` with the `image_id`. The backend validates the
-  call, runs YOLO locally, returns the structured result to Claude as a
-  `tool_result`, and streams the tool activity into the chat.
-* Claude puts the result into words in the interface language: what the
-  analyzer saw, where in the picture, how sure it was, and the limitations.
-  The chat shows no picture with boxes and no table of scores.
+  metadata; for an X-ray or a scan the backend runs `analyze_image` itself
+  before Claude answers, so the user does not have to ask, and for a document
+  the label tells Claude to call the document reader.
+* `analyze_image` sends the picture, with the user's words as context, to a
+  Claude vision request with its own prompt and a strict schema. It returns a
+  description: the kind of image and body region, its quality, each finding
+  with its place on the picture, how much it matters and how sure the reader
+  is, an impression, the limitations and what the radiologist's report would
+  add. The backend validates the call, masks identifiers, returns the result
+  to the chat model as a `tool_result`, and streams the tool activity into
+  the chat.
+* The chat model puts the result into words in the interface language, in the
+  first person, with the care each finding's confidence calls for, and says
+  that the radiologist's report has to confirm it. It is a description by an
+  AI, not a validated detector and not a diagnosis.
 
 ## Requirements
 
-* Python 3.10 – 3.12 (PyTorch/Ultralytics wheels; 3.12 was used for development)
+* Python 3.10 – 3.12 (PyTorch wheels; 3.12 was used for development)
 * Node.js 20+
 * An Anthropic API key
-* Optional: custom chest X-ray YOLO weights (see [models/README.md](models/README.md))
 * About 600 MB of disk and an internet connection on first start for the image
   triage model, downloaded automatically (set `IMAGE_TRIAGE_ENABLED=false` to skip it)
 
@@ -88,9 +94,9 @@ backend serves the frontend itself, so neither setting is needed there.
 
 1. Accept the consent dialog (required before anything is sent to Claude).
 2. Ask a question, or use one of the suggested prompts.
-3. Attach an X-ray with the paperclip (PNG, JPEG, WEBP or BMP, up to 10 MB;
-   drag-and-drop and paste also work). The server recognises it as an X-ray
-   and the assistant runs the analysis straight away; a short note such as
+3. Attach an X-ray, a scan or a photo with the paperclip (PNG, JPEG, WEBP or
+   BMP, up to 10 MB; drag-and-drop and paste also work). The server recognises
+   an X-ray or a scan and has it looked at straight away; a short note such as
    „това е на гърдите ми“ is enough.
 4. The pencil under one of your messages (on hover with a mouse, always on a
    touch screen) rewrites it. The rewritten message is sent again as a new
@@ -104,18 +110,17 @@ backend serves the frontend itself, so neither setting is needed there.
    plum, rose accent), all dark. Both are kept in `localStorage`, apply
    before the first paint, and carry no health data.
 
-### Without YOLO weights
+### Looking at a medical image
 
-The app works without a model. An analysis request then produces the tool
-status `model_not_configured`, and the assistant explains that no analysis was
-performed.
-
-### With YOLO weights
-
-Put custom chest X-ray **detection** weights in `models/`, set
-`YOLO_WEIGHTS_PATH`, restart the backend. Stock COCO weights (`yolov8n.pt`
-etc.) are detected by their class names and rejected as `model_incompatible`.
-Details: [models/README.md](models/README.md).
+Attach an X-ray, a CT or MRI slice, an ultrasound, a mammogram or a photo of
+skin, a wound or an eye. For an X-ray or a scan the backend calls
+`analyze_image` itself at upload; for a photo the assistant calls it. The
+picture goes to Claude in a separate request (the consent dialog says so) and
+comes back as a structured description, which the assistant puts into a
+doctor's words. There are no boxes and no scores: it is a description by an
+AI vision model, not a validated detector, and the assistant says every time
+that the radiologist's report or an examination has to confirm it. Disable
+the tool with `IMAGE_READER_ENABLED=false`.
 
 ### Finding a doctor (Superdoc)
 
@@ -249,11 +254,6 @@ What the build does, and why:
   into the image, where the backend serves it from `/`;
 * installs the CPU build of PyTorch first, so the multi-gigabyte CUDA wheels
   never enter the image;
-* downloads the X-ray Analyzer weights from the Hugging Face repository named
-  in [models/README.md](models/README.md) and verifies their SHA-256, so the
-  image carries exactly the checked file without committing a binary to git
-  (`YOLO_WEIGHTS_URL` and `YOLO_WEIGHTS_SHA256` are build arguments; an empty
-  URL builds without a model);
 * downloads the CLIP triage model into the image, because a Railway container's
   filesystem is wiped on every deploy and a fresh instance must not fetch
   600 MB before it can label an upload;
@@ -268,8 +268,8 @@ Hobby plan or above. Everything happens in the dashboard:
    first build downloads about 1 GB and takes several minutes.
 2. **Variables**: add `ANTHROPIC_API_KEY`.
 3. **Settings → Networking → Generate Domain**. Open the domain: that is the
-   app. `/api/health` on the same domain shows whether the key and both
-   models are in place.
+   app. `/api/health` on the same domain shows whether the key and the
+   triage model are in place.
 4. Recommended, **Settings → Deploy**: Healthcheck Path `/api/health`,
    Serverless (app sleeping) off, one replica, restart on failure.
 
@@ -282,7 +282,7 @@ must match the service's name in Railway.
 Notes:
 
 * Keep one replica and leave app sleeping off: uploaded images live in the
-  process that received them, and a cold start reloads both models.
+  process that received them, and a cold start reloads the triage model.
 * Expect roughly 1.5 to 2 GB of memory. Setting `IMAGE_TRIAGE_ENABLED=false`
   roughly halves that, at the price of the automatic X-ray recognition on
   upload.
@@ -294,7 +294,7 @@ Notes:
 ## Checks
 
 ```bash
-# Backend: 130 offline checks (no network, key or weights needed)
+# Backend: 140 offline checks (no network and no key needed)
 cd backend && python smoke_test.py
 
 # Frontend
@@ -303,7 +303,8 @@ cd frontend && npm run typecheck && npm run build
 
 `smoke_test.py` covers upload validation, session isolation, path traversal,
 the interface language (`Accept-Language` on errors, tool cards and the system prompt),
-the tool registry, the YOLO guard rails, the document reader (PDF validation,
+the tool registry, the image reader (scripted vision replies, context and
+language, masking of identifiers, failure handling), the document reader (PDF validation,
 scripted vision replies, masking of identifiers, failure handling), the
 Superdoc and Framar tools (against HTML fixtures: name matching, leaflet extraction, pair-wise interaction checks,
 URL guards, failure handling), and the tool-use loop (message and
@@ -324,10 +325,10 @@ The frontend sends it with every request; see `backend/i18n.py`.
 |---|---|
 | `POST /api/chat` | One user turn. Body: `conversation_id`, `consent`, `history`, `message {text, attachment_ids}`. Response: Server-Sent Events — `text_delta`, `tool_start`, `tool_end`, `emergency`, `notice`, `error`, `done`. |
 | `POST /api/upload` | Multipart `file` (image or PDF) + `conversation_id`. Returns a temporary `image_id`. |
-| `GET /api/images/{image_id}` | Original or annotated image, only for the session that owns it. |
+| `GET /api/images/{image_id}` | The uploaded image, only for the session that owns it. |
 | `DELETE /api/conversations/{id}` | Delete a conversation's images and tool results. |
 | `DELETE /api/session` | Delete everything stored for the session. |
-| `GET /api/health` | Status; whether Claude, YOLO and the image triage model are configured. |
+| `GET /api/health` | Status; whether Claude, the image reader and the image triage model are configured. |
 
 ## Project structure
 
@@ -339,11 +340,11 @@ The frontend sends it with every request; see `backend/i18n.py`.
 │   ├── routers/                    chat.py (SSE), uploads.py, deps.py
 │   ├── services/
 │   │   ├── claude_service.py       Messages API streaming + tool-use loop
-│   │   ├── tool_registry.py        Tool registry: analyze_xray, read_document, find_doctors, lookup_medication
+│   │   ├── tool_registry.py        Tool registry: analyze_image, read_document, find_doctors, lookup_medication
+│   │   ├── image_reader_service.py Describes an uploaded medical image with Claude vision
 │   │   ├── document_service.py     Reads an uploaded medical document with Claude vision
 │   │   ├── framar_service.py       Medication leaflets and interactions from framar.bg
 │   │   ├── superdoc_service.py     Doctor search on superdoc.bg listing pages
-│   │   ├── yolo_service.py         Weights checks, inference, annotation
 │   │   ├── image_triage_service.py Local CLIP triage: xray / scan / document / photo
 │   │   ├── image_service.py        Validated, session-scoped temp image store
 │   │   └── safety_service.py       Input cleaning, emergency wording, log refs
@@ -359,7 +360,7 @@ The frontend sends it with every request; see `backend/i18n.py`.
 │   │                               SettingsDialog, ui/ (shadcn-style primitives)
 │   └── lib/                        api.ts, i18n.ts (UI strings), preferences.ts (language, themes),
 │                                   storage.ts, types.ts, utils.ts
-├── models/                         YOLO weights go here (README.md inside); triage/ is the CLIP cache
+├── models/                         triage/ is the CLIP cache (README.md inside)
 ├── .railway/railway.ts             Railway infrastructure as code (one service)
 ├── Dockerfile                      The whole app in one image: frontend static export + API + models
 ├── docker-compose.yml              Runs that image with the settings from .env (not used by Railway)
@@ -400,7 +401,7 @@ registry.register(ToolSpec(
   registry and inputs validated with Pydantic; there is no code-execution or
   shell tool. Tool rounds are capped (`MAX_TOOL_ITERATIONS`), after which the
   request is sent with `tool_choice: none`. Each tool call has a timeout.
-* **No model-supplied paths.** `analyze_xray` accepts only an opaque
+* **No model-supplied paths.** `analyze_image` and `read_document` accept only an opaque
   `image_id`, which must belong to an upload from the same session and
   conversation. Files are stored under server-generated names.
 * **Uploads are validated by content** (decoded with Pillow), limited in size
@@ -412,9 +413,10 @@ registry.register(ToolSpec(
   result ids in its history; the server restores the content from its own
   store.
 * **Consent** is required in the UI and enforced by the API before any message
-  is forwarded to Claude. Messages are processed by Anthropic's API. X-ray
-  images are not sent there. A document is sent there only when the user asks
-  for it to be read; its name, ЕГН and address are kept out of the result.
+  is forwarded to Claude. Messages are processed by Anthropic's API. A medical
+  image is sent there only through `analyze_image`, in its own request, and a
+  document only when the user asks for it to be read; names, ЕГН and addresses
+  are kept out of both results.
 * **History** lives in the browser's `sessionStorage` and can be deleted per
   conversation or entirely from Настройки. The interface language and the
   theme are the only preferences kept in `localStorage`; they carry no health

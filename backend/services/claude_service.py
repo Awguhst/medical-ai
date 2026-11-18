@@ -13,14 +13,15 @@ Flow for one user turn (`stream_chat`):
 4. Repeat until Claude answers without tools, bounded by MAX_TOOL_ITERATIONS;
    the last allowed request is sent with tool_choice "none".
 
-An upload the local vision model recognised as an X-ray skips the model's
-decision: `analyze_xray` runs before the first request, its card is streamed
-at once, and the result goes into the user turn as a completed tool result.
+An upload the local vision model recognised as an X-ray or a scan skips the
+model's decision: `analyze_image` runs before the first request, its card is
+streamed at once, and the result goes into the user turn as a completed tool
+result.
 
 The generator yields plain dict events that the router serialises as SSE.
 This conversation never carries file bytes: uploads are described by metadata.
-(The read_document tool makes its own separate request with the file; see
-document_service.py.)
+(The analyze_image and read_document tools make their own separate requests
+with the file; see image_reader_service.py and document_service.py.)
 """
 
 from __future__ import annotations
@@ -41,7 +42,12 @@ from services.safety_service import clean_text, detect_emergency, log_ref
 from services.tool_registry import ToolContext, ToolRegistry, get_registry
 
 # Which tool fits an upload, from the local image triage label.
-_TOOL_FOR_CONTENT = {"xray": "analyze_xray", "document": "read_document"}
+_TOOL_FOR_CONTENT = {
+    "xray": "analyze_image",
+    "scan": "analyze_image",
+    "photo": "analyze_image",
+    "document": "read_document",
+}
 
 # The prompt asks for no long dashes; this guarantees none reach the chat.
 _NO_LONG_DASHES = str.maketrans({"\u2014": "-", "\u2013": "-", "\u2015": "-"})
@@ -119,20 +125,20 @@ def _attachments_block(
     return "<attachments>\n" + json.dumps(items, ensure_ascii=False) + "\n</attachments>"
 
 
-def _xray_uploads(
+def _medical_uploads(
     request: ChatRequest, store: ImageStore, session_id: str, registry: ToolRegistry, settings: Settings
 ) -> list[ImageRecord]:
-    """New uploads the local vision model recognised as X-rays. The application
-    runs analyze_xray on them itself, before Claude answers, so the user never
-    has to ask and the model never has to decide. (Forcing the call through
-    tool_choice is not supported by every model.) Only the current message
-    counts: earlier attachments already had their turn."""
-    if registry.get("analyze_xray") is None:
+    """New uploads the local vision model recognised as X-rays or scans. The
+    application runs analyze_image on them itself, before Claude answers, so
+    the user never has to ask and the model never has to decide. (Forcing the
+    call through tool_choice is not supported by every model.) Only the
+    current message counts: earlier attachments already had their turn."""
+    if registry.get("analyze_image") is None:
         return []
     records: list[ImageRecord] = []
     for image_id in request.message.attachment_ids[: settings.max_attachments_per_message]:
         record = store.get(image_id, session_id, request.conversation_id, kind="upload")
-        if record is not None and record.media == "image" and record.content == "xray":
+        if record is not None and record.media == "image" and record.content in {"xray", "scan"}:
             records.append(record)
     return records
 
@@ -286,21 +292,23 @@ async def stream_chat(
 
     messages = build_messages(request, session_id, store, settings, set(registry.names()), language)
 
-    # New uploads recognised as X-rays: run the detector now, stream the card
-    # to the browser, and give Claude the result as an already completed call.
+    # New uploads recognised as X-rays or scans: have them looked at now, with
+    # the user's words as context, stream the card to the browser, and give
+    # Claude the result as an already completed call.
     app_blocks: list[str] = []
-    for record in _xray_uploads(request, store, session_id, registry, settings):
-        spec = registry.get("analyze_xray")
+    for record in _medical_uploads(request, store, session_id, registry, settings):
+        spec = registry.get("analyze_image")
         tool_use_id = "app_" + secrets.token_urlsafe(12)
         yield {
             "type": "tool_start",
             "tool_use_id": tool_use_id,
-            "tool_name": "analyze_xray",
-            "label": spec.label(language) if spec else "analyze_xray",
+            "tool_name": "analyze_image",
+            "label": spec.label(language) if spec else "analyze_image",
             "running_text": spec.running_text(language) if spec else "",
         }
-        outcome = await registry.execute("analyze_xray", {"image_id": record.image_id}, ctx)
-        result_id = store.store_tool_result(session_id, conv, "analyze_xray", outcome.payload)
+        tool_input = {"image_id": record.image_id, "context": clean_text(request.message.text, 600)}
+        outcome = await registry.execute("analyze_image", tool_input, ctx)
+        result_id = store.store_tool_result(session_id, conv, "analyze_image", outcome.payload)
         yield {
             "type": "tool_end",
             "tool_use_id": tool_use_id,
@@ -308,7 +316,7 @@ async def stream_chat(
             "is_error": outcome.is_error,
             "result": outcome.ui,
         }
-        app_blocks.append(_app_tool_result_block("analyze_xray", record.image_id, outcome.payload))
+        app_blocks.append(_app_tool_result_block("analyze_image", record.image_id, outcome.payload))
     if app_blocks:
         current = messages[-1]  # the user turn being answered; always text content
         messages[-1] = {"role": "user", "content": "\n\n".join(app_blocks) + "\n\n" + str(current["content"])}
@@ -414,7 +422,7 @@ async def stream_chat(
         tool_rounds += 1
 
     logger.info(
-        "chat turn done conv=%s stop=%s tool_rounds=%d app_xray_runs=%d",
+        "chat turn done conv=%s stop=%s tool_rounds=%d app_image_runs=%d",
         log_ref(conv), getattr(final, "stop_reason", None), tool_rounds, len(app_blocks),
     )
     yield {

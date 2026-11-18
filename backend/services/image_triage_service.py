@@ -3,15 +3,15 @@
 A zero-shot CLIP vision transformer (ViT-B/32 by default) runs on the server
 and labels every uploaded image as one of:
 
-* ``xray``      a radiograph (chest, limb, dental ...): the analyze_xray input
+* ``xray``      a radiograph (chest, limb, dental ...)
 * ``scan``      another medical image (CT, MRI, ultrasound, mammography)
 * ``document``  paper with text: a report, lab results, a prescription
 * ``photo``     an ordinary photograph (skin, a body part, a room)
 * ``unknown``   no label reached the confidence threshold, or triage is off
 
 The label is stored on the upload record, sent to Claude as attachment
-metadata, used to force the matching tool on the first model step, and lets
-analyze_xray refuse photos and documents without running YOLO.
+metadata, and lets the application run analyze_image on X-rays and scans
+before Claude answers and keep documents away from the image reader.
 
 The picture never leaves the server. The model is downloaded once from the
 Hugging Face hub (safetensors only; no pickled checkpoints) and runs on the
@@ -97,7 +97,7 @@ UNKNOWN = TriageResult("unknown", 0.0)
 
 
 def _colour_fraction(rgb: Image.Image) -> float:
-    """Share of pixels that are clearly coloured (same test as the YOLO guard)."""
+    """Share of pixels that are clearly coloured (radiographs and scans are greyscale)."""
     import numpy as np
 
     hsv = rgb.resize((128, 128)).convert("HSV")

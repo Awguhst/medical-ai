@@ -20,14 +20,13 @@ from fastapi.staticfiles import StaticFiles
 
 from dotenv import dotenv_values
 
-from config import BACKEND_DIR, PROJECT_ROOT, get_settings
+from config import BACKEND_DIR, PROJECT_ROOT, Settings, get_settings
 from i18n import parse_language, tr
-from models.schemas import HealthResponse, ImageTriageHealth, YoloHealth
+from models.schemas import HealthResponse, ImageReaderHealth, ImageTriageHealth
 from routers import chat, uploads
 from services.image_service import get_image_store
 from services.image_triage_service import get_image_triage_service
 from services.tool_registry import get_registry
-from services.yolo_service import get_yolo_service
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 # Request/response bodies are never logged; keep the HTTP client quiet as well.
@@ -65,16 +64,25 @@ async def _cleanup_loop() -> None:
             logger.info("removed %d expired temporary image(s)", removed)
 
 
+def _image_reader_health(settings: Settings) -> ImageReaderHealth:
+    """The Claude vision reader behind analyze_image needs nothing but the API key."""
+    model = settings.anthropic_model
+    if not settings.image_reader_enabled:
+        return ImageReaderHealth(status="disabled", detail="Disabled with IMAGE_READER_ENABLED=false.", model=model)
+    if not settings.claude_configured:
+        return ImageReaderHealth(status="not_configured", detail="ANTHROPIC_API_KEY is not set.", model=model)
+    return ImageReaderHealth(status="ready", detail="Images are described by Claude vision.", model=model)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     settings = get_settings()
     store = get_image_store()
-    yolo = get_yolo_service().status()
     triage = get_image_triage_service()
     logger.info(
-        "MedAI backend starting | claude_configured=%s key_source=%s model=%s | yolo=%s | image_triage=%s",
-        settings.claude_configured, _claude_key_source(), settings.anthropic_model, yolo.status,
-        triage.status().status,
+        "MedAI backend starting | claude_configured=%s key_source=%s model=%s | image_reader=%s | image_triage=%s",
+        settings.claude_configured, _claude_key_source(), settings.anthropic_model,
+        _image_reader_health(settings).status, triage.status().status,
     )
     dist = _frontend_dist()
     logger.info(
@@ -135,18 +143,13 @@ async def validation_error(request: Request, exc: RequestValidationError) -> JSO
 @app.get("/api/health", response_model=HealthResponse)
 async def health() -> HealthResponse:
     settings = get_settings()
-    yolo = get_yolo_service().status()
     triage = get_image_triage_service().status()
     return HealthResponse(
         status="ok",
         claude_configured=settings.claude_configured,
         claude_key_source=_claude_key_source(),  # type: ignore[arg-type]
         claude_model=settings.anthropic_model,
-        yolo=YoloHealth(
-            status=yolo.status,  # type: ignore[arg-type]
-            detail=yolo.detail,
-            classes=yolo.classes,
-        ),
+        image_reader=_image_reader_health(settings),
         image_triage=ImageTriageHealth(status=triage.status, detail=triage.detail, model=triage.model),
         tools=get_registry().names(),
     )

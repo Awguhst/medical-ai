@@ -548,7 +548,6 @@ export default function ChatInterface() {
   }, []);
 
   // --- render -------------------------------------------------------------
-  const yoloStatus = health?.yolo.status;
   const lastMessage = messages[messages.length - 1];
   const showScrollButton = !atBottom && messages.length > 0;
 
@@ -681,17 +680,6 @@ export default function ChatInterface() {
                       );
                     })}
                   </div>
-
-                  {health && yoloStatus !== "ready" && (
-                    <p className="mt-7 flex max-w-xl animate-fade items-start gap-2.5 rounded-xl border border-line bg-fill px-4 py-3 text-left text-[13px] leading-relaxed text-ink-500">
-                      <ScanLine className="mt-0.5 size-4 shrink-0 text-ink-400" />
-                      <span>
-                        {yoloStatus === "incompatible"
-                          ? t("xray_unavailable_incompatible")
-                          : t("xray_unavailable_missing")}
-                      </span>
-                    </p>
-                  )}
                 </div>
               ) : (
                 <div

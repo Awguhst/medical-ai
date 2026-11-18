@@ -48,7 +48,7 @@ def _resolve_path(raw: str) -> Path | None:
     path = Path(raw)
     if not path.is_absolute():
         # Relative paths are resolved against the project root, so that
-        # YOLO_WEIGHTS_PATH=./models/medical_yolo.pt works from any cwd.
+        # IMAGE_TRIAGE_CACHE_DIR=./models/triage works from any cwd.
         path = PROJECT_ROOT / path
     return path.resolve()
 
@@ -64,10 +64,7 @@ class Settings:
     claude_timeout_seconds: float = 180.0
     max_tool_iterations: int = 4
 
-    # --- YOLO -----------------------------------------------------------
-    yolo_weights_path: Path | None = None
-    yolo_conf_threshold: float = 0.25
-    yolo_image_size: int = 640
+    # --- Tools ----------------------------------------------------------
     tool_timeout_seconds: float = 60.0
 
     # --- Image triage (local CLIP vision transformer) ---------------------
@@ -89,6 +86,10 @@ class Settings:
     document_reader_enabled: bool = True
     document_max_tokens: int = 8000
     max_pdf_pages: int = 10
+
+    # --- Image reader (Claude vision) -----------------------------------
+    image_reader_enabled: bool = True
+    image_reader_max_tokens: int = 4000
 
     # --- Uploads --------------------------------------------------------
     max_upload_bytes: int = 10 * 1024 * 1024
@@ -137,9 +138,6 @@ def get_settings() -> Settings:
         anthropic_refusal_fallback=_bool("ANTHROPIC_REFUSAL_FALLBACK", True),
         claude_timeout_seconds=_float("CLAUDE_TIMEOUT_SECONDS", 180.0),
         max_tool_iterations=max(1, _int("MAX_TOOL_ITERATIONS", 4)),
-        yolo_weights_path=_resolve_path(os.getenv("YOLO_WEIGHTS_PATH", "")),
-        yolo_conf_threshold=_float("YOLO_CONF_THRESHOLD", 0.25),
-        yolo_image_size=_int("YOLO_IMAGE_SIZE", 640),
         tool_timeout_seconds=_float("TOOL_TIMEOUT_SECONDS", 60.0),
         image_triage_enabled=_bool("IMAGE_TRIAGE_ENABLED", True),
         image_triage_model=os.getenv("IMAGE_TRIAGE_MODEL", "").strip() or "openai/clip-vit-base-patch32",
@@ -153,6 +151,8 @@ def get_settings() -> Settings:
         document_reader_enabled=_bool("DOCUMENT_READER_ENABLED", True),
         document_max_tokens=_int("DOCUMENT_MAX_TOKENS", 8000),
         max_pdf_pages=max(1, _int("MAX_PDF_PAGES", 10)),
+        image_reader_enabled=_bool("IMAGE_READER_ENABLED", True),
+        image_reader_max_tokens=_int("IMAGE_READER_MAX_TOKENS", 4000),
         max_upload_bytes=_int("MAX_UPLOAD_MB", 10) * 1024 * 1024,
         image_ttl_seconds=_int("IMAGE_TTL_MINUTES", 60) * 60,
         frontend_origins=origins,

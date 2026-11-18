@@ -66,10 +66,12 @@ class UploadResponse(BaseModel):
 # --- Health --------------------------------------------------------------
 
 
-class YoloHealth(BaseModel):
-    status: Literal["ready", "not_configured", "weights_missing", "incompatible", "error"]
+class ImageReaderHealth(BaseModel):
+    """The Claude vision reader behind analyze_image."""
+
+    status: Literal["ready", "not_configured", "disabled"]
     detail: str
-    classes: list[str] = Field(default_factory=list)
+    model: str
 
 
 class ImageTriageHealth(BaseModel):
@@ -84,20 +86,21 @@ class HealthResponse(BaseModel):
     # ".env" or "environment": a variable in the launching shell overrides the file.
     claude_key_source: Literal[".env", "environment", "none"] = "none"
     claude_model: str
-    yolo: YoloHealth
+    image_reader: ImageReaderHealth
     image_triage: ImageTriageHealth
     tools: list[str]
 
 
-# --- analyze_xray tool ---------------------------------------------------
+# --- analyze_image tool ---------------------------------------------------
 
 
-class AnalyzeXrayInput(BaseModel):
-    """Input Claude may supply. Only an opaque identifier — never a path."""
+class AnalyzeImageInput(BaseModel):
+    """Input Claude may supply: an opaque identifier (never a path) and a short clinical context."""
 
     model_config = ConfigDict(extra="forbid")
 
     image_id: str = Field(pattern=ID_PATTERN)
+    context: str = Field(default="", max_length=600)
 
 
 class ReadDocumentInput(BaseModel):

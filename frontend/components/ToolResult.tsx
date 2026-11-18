@@ -19,8 +19,8 @@ import MedicationResults from "@/components/MedicationResults";
 
 const OK_STATUSES = new Set(["success", "partial"]);
 const INFO_STATUSES = new Set([
-  "model_not_configured",
-  "model_incompatible",
+  "not_medical_image",
+  "is_document",
   "unsupported_image",
   "image_not_found",
   "no_results",

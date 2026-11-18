@@ -21,13 +21,13 @@ from pydantic import BaseModel, ValidationError
 
 from config import Settings, get_settings
 from i18n import DEFAULT_LANGUAGE, MESSAGES, localize, tr
-from models.schemas import AnalyzeXrayInput, FindDoctorsInput, LookupMedicationInput, ReadDocumentInput
+from models.schemas import AnalyzeImageInput, FindDoctorsInput, LookupMedicationInput, ReadDocumentInput
 from services.document_service import get_document_reader
 from services.framar_service import get_framar_service
+from services.image_reader_service import get_image_reader
 from services.image_service import get_image_store
 from services.safety_service import log_ref
 from services.superdoc_service import get_superdoc_service
-from services.yolo_service import get_yolo_service
 
 logger = logging.getLogger("medai.tools")
 
@@ -144,38 +144,17 @@ def _ui_message(language: str, tool: str, status: str, fallback: str) -> str:
     return tr(language, key if key in MESSAGES else f"{tool}.{fallback}")
 
 
-# --- analyze_xray ----------------------------------------------------------
+# --- analyze_image ---------------------------------------------------------
 
 
-_TRIAGE_REJECTIONS = {
-    "photo": (
-        "Local image triage classified this upload as an ordinary photograph, not a "
-        "radiograph, so it was not analysed. Ask the user to describe what the picture shows."
-    ),
-    "document": (
-        "Local image triage classified this upload as a document (paper with text), not a "
-        "radiograph, so it was not analysed. Use read_document for it."
-    ),
-    "scan": (
-        "Local image triage classified this upload as a CT, MRI, ultrasound or mammography "
-        "image, not a plain X-ray, so the X-ray detector was not run on it."
-    ),
-}
+_DOCUMENT_REJECTION = (
+    "Local image triage classified this upload as a document (paper with text), not a "
+    "medical picture, so it was not looked at. Use read_document for it."
+)
 
 
-def _triage_rejection(record, min_confidence: float) -> str | None:
-    """Reason to skip YOLO, when triage is confident the picture is not an X-ray."""
-    label, confidence = record.content, record.content_confidence
-    if label in {"photo", "document"} and confidence >= min_confidence:
-        return _TRIAGE_REJECTIONS[label]
-    # X-ray and CT slices can look alike: only a very confident "scan" blocks the run.
-    if label == "scan" and confidence >= 0.8:
-        return _TRIAGE_REJECTIONS[label]
-    return None
-
-
-async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
-    assert isinstance(parsed, AnalyzeXrayInput)
+async def _analyze_image(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
+    assert isinstance(parsed, AnalyzeImageInput)
     store = get_image_store()
 
     # 1-2. The id must name an upload made in *this* conversation by *this* session.
@@ -186,16 +165,14 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
             "image_id": parsed.image_id,
             "message": (
                 "No uploaded image with this id exists in the current conversation "
-                "(it may have expired). Use an image_id from the attachment metadata."
+                "(it may have expired). Ask the user to attach the image again."
             ),
         }
         return ToolOutcome(
             payload,
             {"status": "image_not_found",
-             "message": _ui_message(ctx.language, "analyze_xray", "image_not_found", "error")},
-            is_error=True,
+             "message": _ui_message(ctx.language, "analyze_image", "image_not_found", "error")},
         )
-
     if record.media != "image":
         return ToolOutcome(
             {
@@ -204,56 +181,41 @@ async def _analyze_xray(parsed: BaseModel, ctx: ToolContext) -> ToolOutcome:
                 "message": "This attachment is a PDF document, not an image. Use read_document for documents.",
             },
             {"status": "unsupported_image",
-             "message": _ui_message(ctx.language, "analyze_xray", "unsupported_image", "error")},
+             "message": _ui_message(ctx.language, "analyze_image", "unsupported_image", "error")},
         )
 
     triage = {"content": record.content, "confidence": round(record.content_confidence, 2)}
 
-    # The local vision transformer already looked at the picture: a photo or a
-    # page of text is not pushed through a chest X-ray detector.
-    rejection = _triage_rejection(record, ctx.settings.image_triage_min_confidence)
-    if rejection:
+    # A page of text is for the document reader, which keeps names out of the result.
+    if record.content == "document" and record.content_confidence >= ctx.settings.image_triage_min_confidence:
         return ToolOutcome(
-            {
-                "status": "unsupported_image",
-                "image_id": record.image_id,
-                "message": rejection,
-                "triage": triage,
-                "detections": [],
-            },
+            {"status": "unsupported_image", "image_id": record.image_id, "message": _DOCUMENT_REJECTION,
+             "triage": triage},
             {"status": "unsupported_image",
-             "message": _ui_message(ctx.language, "analyze_xray", "unsupported_image", "error")},
+             "message": _ui_message(ctx.language, "analyze_image", "unsupported_image", "error")},
         )
 
-    # 3-6. Weights check, inference and drawing run off the event loop.
-    result = await asyncio.to_thread(get_yolo_service().analyze, record.path)
-
-    payload = {"image_id": record.image_id, "triage": triage, **result.payload}
+    # 3. A separate Claude request describes the picture; the chat model gets only the result.
+    payload = {
+        "image_id": record.image_id,
+        "triage": triage,
+        **(await get_image_reader().read(record, parsed.context, ctx.language)),
+    }
     status = payload["status"]
-
-    annotated_id = None
-    if result.annotated is not None:
-        annotated = store.store_annotated(result.annotated, record)
-        annotated_id = annotated.image_id
-        payload["annotated_image_id"] = annotated_id
-
+    reading = payload.get("reading") or {}
     ui = {
         "status": status,
-        "message": _ui_message(ctx.language, "analyze_xray", status, "error"),
+        "message": _ui_message(ctx.language, "analyze_image", status, "error"),
         "image_id": record.image_id,
-        "annotated_image_id": annotated_id,
-        "model_type": payload.get("model_type"),
-        "model_classes": payload.get("model_classes", []),
-        "score_threshold": payload.get("score_threshold"),
-        "detections": payload.get("detections", []),
+        "sent_to_claude": bool(payload.get("sent_to_claude", False)),
+        "modality": reading.get("modality") or payload.get("modality"),
+        "body_region": reading.get("body_region") or payload.get("body_region"),
     }
     logger.info(
-        "analyze_xray status=%s detections=%d conv=%s",
-        status,
-        len(ui["detections"]),
-        log_ref(ctx.conversation_id),
+        "analyze_image status=%s modality=%s findings=%d conv=%s",
+        status, ui["modality"], len(reading.get("findings", [])), log_ref(ctx.conversation_id),
     )
-    return ToolOutcome(payload, ui, is_error=status in {"error", "model_error"})
+    return ToolOutcome(payload, ui, is_error=status in {"error", "reader_unavailable"})
 
 
 # --- read_document -----------------------------------------------------------
@@ -489,7 +451,7 @@ def build_registry() -> ToolRegistry:
                     "read, explain or check an attached document, or attaches a PDF with a "
                     "question about it. Pass the image_id exactly as it appears in the "
                     "attachment metadata. Do not use it for X-ray films or other medical "
-                    "pictures (use analyze_xray for X-rays), and do not call it again for a "
+                    "pictures (use analyze_image for those), and do not call it again for a "
                     "file that already has a result in the conversation. Result `status`: "
                     "`success`, `not_a_medical_document`, `medical_image`, `unreadable`, "
                     "`document_not_found`, `reader_unavailable`, `too_long`, `not_read`."
@@ -512,48 +474,60 @@ def build_registry() -> ToolRegistry:
                 timeout_seconds=150,
             )
         )
-    registry.register(
-        ToolSpec(
-            name="analyze_xray",
-            description=(
-                "Look at an uploaded X-ray image with a locally hosted, medically trained "
-                "detection model. Returns what it found: class labels, where in the image "
-                "each region lies and model scores. The user sees none of this, only your "
-                "words: report it in the first person as what you see on the picture, in a "
-                "doctor's words, and never mention the tool, the model or its architecture. "
-                "The result does not establish a medical diagnosis. "
-                "Call it as soon as the user attaches an image in this conversation, "
-                "unless their words or the file name show it is a document (then use "
-                "read_document). Do not wait for the user to ask for an analysis or to "
-                "say that it is an X-ray: the attachment metadata carries a `content` label "
-                "from a local vision model (`xray`, `scan`, `document`, `photo`, `unknown`) "
-                "and a `suggested_tool`. For `xray` the application usually runs this tool "
-                "itself at upload and puts the result in the message, so call it only when "
-                "no result is present; call it yourself for `unknown`. It also "
-                "checks for itself and returns `unsupported_image` for anything that is not "
-                "a radiograph. Pass the image_id "
-                "exactly as it appears in the attachment metadata. The result's "
-                "`status` field says whether the model ran (`success`) or why no analysis "
-                "was possible (`model_not_configured`, `model_incompatible`, "
-                "`unsupported_image`, `image_not_found`)."
-            ),
-            input_schema={
-                "type": "object",
-                "properties": {
-                    "image_id": {
-                        "type": "string",
-                        "description": "Identifier of an image attached in the current conversation.",
-                    }
+    if get_settings().image_reader_enabled:
+        registry.register(
+            ToolSpec(
+                name="analyze_image",
+                description=(
+                    "Look at an uploaded medical image (an X-ray, a CT or MRI slice, an "
+                    "ultrasound, a mammogram, an ECG strip, a photo of skin, a wound or an eye) "
+                    "with a vision model that returns a structured description: the kind of "
+                    "image and body region, its quality, each finding with where it is on the "
+                    "picture, how much it matters and how sure the reader is, an overall "
+                    "impression, the limitations of the picture and what the radiologist's "
+                    "report would add. The user sees none of this, only your words: report it "
+                    "in the first person as what you see on the picture, in a doctor's words, "
+                    "and never mention the tool or the model. It is a description by an AI, "
+                    "not a diagnosis and not a validated detector. "
+                    "Call it as soon as the user attaches an image in this conversation, unless "
+                    "their words or the file name show it is a text document (then use "
+                    "read_document). Do not wait for the user to ask: the attachment metadata "
+                    "carries a `content` label from local triage (`xray`, `scan`, `document`, "
+                    "`photo`, `unknown`) and a `suggested_tool`. For `xray` and `scan` the "
+                    "application usually runs this tool itself at upload and puts the result in "
+                    "the message, so call it only when no result is present; call it yourself "
+                    "for `photo` and `unknown`. Pass the image_id exactly as it appears in the "
+                    "attachment metadata, and in `context` the few facts that help a reader: "
+                    "what the user says the picture is, their age, their complaint. Result "
+                    "`status`: `success`, `not_medical_image`, `is_document`, `unreadable`, "
+                    "`unsupported_image`, `image_not_found`, `reader_unavailable`, `not_read`."
+                ),
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "image_id": {
+                            "type": "string",
+                            "description": "Identifier of an image attached in the current conversation.",
+                        },
+                        "context": {
+                            "type": "string",
+                            "description": (
+                                "Short clinical context for the reader: what the user says the "
+                                "picture is, their age, their complaint. Empty if there is none."
+                            ),
+                        },
+                    },
+                    "required": ["image_id", "context"],
+                    "additionalProperties": False,
                 },
-                "required": ["image_id"],
-                "additionalProperties": False,
-            },
-            input_model=AnalyzeXrayInput,
-            handler=_analyze_xray,
-            ui_label={"bg": "X-ray Analyzer", "en": "X-ray Analyzer"},
-            ui_running_text={"bg": "Анализиране на изображението...", "en": "Analysing the image..."},
+                input_model=AnalyzeImageInput,
+                handler=_analyze_image,
+                ui_label={"bg": "Анализ на изображение", "en": "Image analysis"},
+                ui_running_text={"bg": "Разглеждане на снимката...", "en": "Looking at the image..."},
+                timeout_seconds=150,
+            )
         )
-    )
+    return registry
     return registry
 
 

@@ -1,8 +1,8 @@
 """Read an uploaded medical document (photo, scan or PDF) with Claude's vision.
 
-Unlike X-ray analysis, which stays on this server, reading a document sends the
-file to the Claude API: a second, separate request whose only job is to turn
-the page into structured data. The chat model never receives the file itself,
+Like looking at a medical image (image_reader_service.py), reading a document
+sends the file to the Claude API: a second, separate request whose only job is
+to turn the page into structured data. The chat model never receives the file itself,
 only this structured result, and it is stored like any other tool result.
 
 Guard rails:
@@ -331,7 +331,7 @@ class DocumentReader:
                 "status": "medical_image", **base,
                 "message": (
                     "The file is a medical picture, not a text document, so there is nothing to read. "
-                    "If it is an X-ray, the analyze_xray tool can be offered instead."
+                    "The analyze_image tool can look at it instead."
                 ),
                 "appears_to_be": doc.summary,
             }

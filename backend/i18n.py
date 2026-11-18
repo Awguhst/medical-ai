@@ -198,30 +198,35 @@ MESSAGES: dict[str, dict[str, str]] = {
         "bg": "Възникна грешка при изпълнението на инструмента.",
         "en": "The tool failed to run.",
     },
-    # --- tool cards: analyze_xray -----------------------------------------------
-    "analyze_xray.success": {"bg": "AI анализът е завършен.", "en": "The AI analysis is complete."},
-    "analyze_xray.model_not_configured": {
-        "bg": "Моделът на X-ray Analyzer не е конфигуриран на сървъра.",
-        "en": "The X-ray Analyzer model is not configured on the server.",
+    # --- tool cards: analyze_image ----------------------------------------------
+    "analyze_image.success": {"bg": "Снимката беше разгледана.", "en": "The image has been looked at."},
+    "analyze_image.not_medical_image": {
+        "bg": "Снимката не изглежда като медицинско изображение.",
+        "en": "The picture does not look like a medical image.",
     },
-    "analyze_xray.model_incompatible": {
-        "bg": "Конфигурираният модел не е медицински и X-ray Analyzer не може да го използва.",
-        "en": "The configured model is not a medical model and the X-ray Analyzer cannot use it.",
+    "analyze_image.is_document": {
+        "bg": "Снимката е документ с текст; за него се използва четецът на документи.",
+        "en": "The picture is a text document; the document reader is for that.",
     },
-    "analyze_xray.model_error": {
-        "bg": "Моделът на X-ray Analyzer не можа да бъде зареден.",
-        "en": "The X-ray Analyzer model could not be loaded.",
+    "analyze_image.unreadable": {
+        "bg": "Снимката е твърде неясна, за да бъде разгледана.",
+        "en": "The image is too unclear to be looked at.",
     },
-    "analyze_xray.unsupported_image": {
-        "bg": "Изображението не изглежда като рентгенова снимка и не беше анализирано.",
-        "en": "The image does not look like an X-ray and was not analysed.",
+    "analyze_image.unsupported_image": {
+        "bg": "Файлът е документ, не медицинско изображение; за него се използва четецът на документи.",
+        "en": "The file is a document, not a medical image; the document reader is for that.",
     },
-    "analyze_xray.image_not_found": {
+    "analyze_image.image_not_found": {
         "bg": "Изображението не е намерено или е изтекло. Прикачете го отново.",
         "en": "The image was not found or has expired. Attach it again.",
     },
-    "analyze_xray.error": {
-        "bg": "Възникна грешка при анализа на изображението.",
+    "analyze_image.reader_unavailable": {
+        "bg": "Снимката не можа да бъде разгледана в момента. Опитайте отново по-късно.",
+        "en": "The image could not be looked at right now. Try again later.",
+    },
+    "analyze_image.not_read": {"bg": "Снимката не беше разгледана.", "en": "The image was not looked at."},
+    "analyze_image.error": {
+        "bg": "Възникна грешка при разглеждането на снимката.",
         "en": "The image analysis failed.",
     },
     # --- tool cards: read_document ----------------------------------------------

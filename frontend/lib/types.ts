@@ -12,12 +12,6 @@ export type Attachment = {
 
 export type TriageLabel = "xray" | "scan" | "document" | "photo" | "unknown";
 
-export type Detection = {
-  class_name: string;
-  score: number;
-  bbox: number[];
-};
-
 export type Doctor = {
   name: string;
   specialties: string;
@@ -69,7 +63,7 @@ export type DocumentData = {
 export type ToolResultData = {
   status: string;
   message: string;
-  /** "doctors" for find_doctors, "medications" for lookup_medication; absent for analyze_xray */
+  /** "doctors" for find_doctors, "medications" for lookup_medication; absent for analyze_image */
   kind?: "doctors" | "medications" | "document";
   /** read_document */
   document?: DocumentData | null;
@@ -84,10 +78,9 @@ export type ToolResultData = {
   doctors?: Doctor[];
   image_id?: string;
   annotated_image_id?: string | null;
-  model_type?: string | null;
-  model_classes?: string[];
-  score_threshold?: number | null;
-  detections?: Detection[];
+  /** analyze_image */
+  modality?: string | null;
+  body_region?: string | null;
 };
 
 export type TextPart = { type: "text"; text: string };
@@ -156,10 +149,11 @@ export type Health = {
   status: "ok";
   claude_configured: boolean;
   claude_model: string;
-  yolo: {
-    status: "ready" | "not_configured" | "weights_missing" | "incompatible" | "error";
+  /** The Claude vision reader behind analyze_image */
+  image_reader: {
+    status: "ready" | "not_configured" | "disabled";
     detail: string;
-    classes: string[];
+    model: string;
   };
   /** Absent on backends built before image triage */
   image_triage?: {

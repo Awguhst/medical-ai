@@ -18,12 +18,10 @@ import {
 } from "@/components/ui/dialog";
 import { Switch } from "@/components/ui/switch";
 
-const YOLO_LABELS: Record<Health["yolo"]["status"], MessageKey> = {
-  ready: "yolo_ready",
-  not_configured: "yolo_not_configured",
-  weights_missing: "yolo_weights_missing",
-  incompatible: "yolo_incompatible",
-  error: "yolo_error",
+const READER_LABELS: Record<Health["image_reader"]["status"], MessageKey> = {
+  ready: "reader_ready",
+  not_configured: "reader_not_configured",
+  disabled: "reader_disabled",
 };
 
 const TRIAGE_LABELS: Record<NonNullable<Health["image_triage"]>["status"], MessageKey> = {
@@ -106,7 +104,7 @@ export default function SettingsDialog({
 }: Props) {
   const t = useT();
   const [confirming, setConfirming] = useState(false);
-  const yoloReady = health?.yolo.status === "ready";
+  const readerReady = health?.image_reader.status === "ready";
   const triage = health?.image_triage;
 
   return (
@@ -249,9 +247,9 @@ export default function SettingsDialog({
                 ok={health ? health.claude_configured : null}
               />
               <StatusRow
-                label={t("status_xray")}
-                value={health ? t(YOLO_LABELS[health.yolo.status]) : t("status_no_data")}
-                ok={health ? yoloReady : null}
+                label={t("status_image_reader")}
+                value={health ? t(READER_LABELS[health.image_reader.status]) : t("status_no_data")}
+                ok={health ? readerReady : null}
               />
               <StatusRow
                 label={t("status_triage")}
@@ -259,11 +257,6 @@ export default function SettingsDialog({
                 ok={!triage ? null : triage.status === "ready" ? true : triage.status === "loading" ? null : false}
               />
             </div>
-            {health && yoloReady && health.yolo.classes.length > 0 && (
-              <p className="mt-2 text-[12px] leading-relaxed text-ink-500">
-                {t("model_classes", { classes: health.yolo.classes.join(", ") })}
-              </p>
-            )}
           </section>
 
           <section>
