@@ -200,8 +200,7 @@ function EditForm({
         aria-label={t("edit_message")}
         className="scroll-quiet block w-full resize-none bg-transparent px-2 py-1.5 text-[15px] leading-relaxed text-ink-900 outline-none"
       />
-      <div className="mt-1.5 flex flex-wrap items-center justify-end gap-x-2 gap-y-2 px-1 pb-0.5">
-        <span className="mr-auto text-[12px] leading-snug text-ink-400">{t("edit_hint")}</span>
+      <div className="mt-1.5 flex items-center justify-end gap-x-2 px-1 pb-0.5">
         <Button variant="ghost" size="sm" onClick={onCancel}>
           {t("cancel")}
         </Button>
