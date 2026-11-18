@@ -15,7 +15,7 @@ import {
 import { ApiError, uploadImage } from "@/lib/api";
 import { useT, type MessageKey } from "@/lib/i18n";
 import type { Attachment } from "@/lib/types";
-import { cn, newId } from "@/lib/utils";
+import { cn, enterSends, newId } from "@/lib/utils";
 
 const ACCEPT = "image/png,image/jpeg,image/webp,image/bmp,application/pdf";
 const isPdf = (file: File) => file.type === "application/pdf" || /\.pdf$/i.test(file.name);
@@ -278,8 +278,7 @@ export default function ChatInput({
           maxLength={6000}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            // Enter inserts a newline; Ctrl+Enter (Cmd+Enter on Mac) sends.
-            if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+            if (enterSends(e)) {
               e.preventDefault();
               submit();
             }

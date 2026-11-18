@@ -18,7 +18,7 @@ import {
 import { useT } from "@/lib/i18n";
 import { parentKey } from "@/lib/thread";
 import type { ChatMessage as Message } from "@/lib/types";
-import { cn } from "@/lib/utils";
+import { cn, enterSends } from "@/lib/utils";
 import { LogoMark } from "@/components/Logo";
 import ImageAttachment from "@/components/ImageAttachment";
 import ToolResult from "@/components/ToolResult";
@@ -182,7 +182,7 @@ function EditForm({
     if (e.key === "Escape") {
       e.preventDefault();
       onCancel();
-    } else if (e.key === "Enter" && (e.ctrlKey || e.metaKey) && !e.nativeEvent.isComposing) {
+    } else if (enterSends(e)) {
       e.preventDefault();
       submit();
     }
